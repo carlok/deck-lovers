@@ -21,10 +21,15 @@ except ImportError:
     print("ERROR: pip install markdown", file=sys.stderr)
     sys.exit(1)
 
-SERVER_HOST  = os.getenv("SERVER_HOST", "localhost")
-PORT         = os.getenv("PORT", "8000")
-WS_URL       = f"ws://{SERVER_HOST}:{PORT}/ws"
-AUDIENCE_URL = f"http://{SERVER_HOST}:{PORT}/audience"
+SERVER_HOST = os.getenv("SERVER_HOST", "localhost")
+PORT        = os.getenv("PORT", "8000")
+WS_SCHEME   = os.getenv("WS_SCHEME", "ws")   # set to "wss" behind TLS
+
+# Behind a reverse proxy the port is handled by the proxy — omit it from URLs
+_port       = f":{PORT}" if WS_SCHEME == "ws" else ""
+HTTP_SCHEME = "https" if WS_SCHEME == "wss" else "http"
+WS_URL      = f"{WS_SCHEME}://{SERVER_HOST}{_port}/ws"
+AUDIENCE_URL = f"{HTTP_SCHEME}://{SERVER_HOST}{_port}/audience"
 
 # ── YouTube ───────────────────────────────────────────────────────────────────
 

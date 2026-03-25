@@ -188,11 +188,12 @@ or serve it via the FastAPI server for live audience features.
 
 ## 7. QR code and network
 
-| Scenario | `SERVER_HOST` |
-|---|---|
-| Local dev | `localhost` (default) |
-| LAN / in-person | `192.168.x.x` (auto-detected by `convert.sh`) |
-| Reverse proxy | `slides.example.com` |
+| Scenario | `SERVER_HOST` | `WS_SCHEME` |
+|---|---|---|
+| Local dev | `localhost` (default) | `ws` (default) |
+| LAN / in-person | `192.168.x.x` (auto-detected) | `ws` |
+| VPS, no TLS | `1.2.3.4` | `ws` |
+| Behind reverse proxy (TLS) | `slides.example.com` | `wss` |
 
 Find your LAN IP manually:
 
@@ -204,29 +205,85 @@ ipconfig getifaddr en0
 ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v 127
 ```
 
-> **HTTPS note:** QR code uses `http://`. Behind TLS, set `WS_SCHEME=wss`
-> and ensure the proxy forwards WebSocket upgrade headers.
+---
+
+## 8. HTTPS in production
+
+The server itself speaks plain HTTP. Put a TLS-terminating reverse proxy in
+front and set `WS_SCHEME=wss` so the baked-in WebSocket URL uses `wss://`.
+
+### Caddy (recommended — automatic TLS via Let's Encrypt)
+
+Install Caddy on the VPS, then create `/etc/caddy/Caddyfile`:
+
+```caddyfile
+slides.example.com {
+    reverse_proxy localhost:8000
+}
+```
+
+```bash
+systemctl reload caddy
+```
+
+Caddy handles certificate issuance, renewal, WebSocket upgrade headers, and
+HTTP→HTTPS redirects automatically.
+
+Deploy with TLS:
+
+```bash
+WS_SCHEME=wss SERVER_HOST=slides.example.com VPS=root@1.2.3.4 ./deploy.sh
+```
+
+### nginx
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name slides.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/slides.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/slides.example.com/privkey.pem;
+
+    location / {
+        proxy_pass         http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+
+        # WebSocket upgrade — required
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+```
+
+> **Firewall:** with a reverse proxy on port 443 you can close port 8000
+> to the public — only the proxy needs to reach it on `localhost`.
 
 ---
 
-## 8. Running bare (no containers)
+## 9. Running bare (no containers)
 
 ```bash
-pip install -r requirements.txt
+pip install -r converter/requirements.txt
+pip install -r server/requirements.txt
 
 # Convert
-cp slides.md output/slides.md
-SERVER_HOST=localhost python md2html.py \
+mkdir -p output && cp slides.md output/slides.md
+SERVER_HOST=localhost python converter/md2html.py \
   --input output/slides.md \
   --output output/slides.html
 
 # Serve
-WORKSPACE_PATH=./output uvicorn server:app --host 0.0.0.0 --port 8000
+WORKSPACE_PATH=./output uvicorn server.server:app --host 0.0.0.0 --port 8000
 ```
 
 ---
 
-## 9. SELinux (Fedora / RHEL)
+## 10. SELinux (Fedora / RHEL)
 
 On SELinux-enforcing systems add `:Z` to bind mounts in `docker-compose.yml`:
 
@@ -239,7 +296,7 @@ tex2md:
 
 ---
 
-## 10. Auto-start with systemd — Quadlet (Podman ≥ 4.4)
+## 11. Auto-start with systemd — Quadlet (Podman ≥ 4.4)
 
 `~/.config/containers/systemd/presentation.container`:
 
@@ -264,7 +321,7 @@ systemctl --user enable --now presentation.container
 
 ---
 
-## 11. Presenter workflow
+## 12. Presenter workflow
 
 1. Edit `slides.md` (or put `slides.tex` in `source/`)
 2. `./deploy.sh` — converts + starts server, shows all endpoints
@@ -276,7 +333,7 @@ systemctl --user enable --now presentation.container
 
 ---
 
-## 12. Extending
+## 13. Extending
 
 ### Add a slide
 
@@ -284,7 +341,7 @@ Add a new `---` section to `slides.md`, then `./deploy.sh --convert-only`.
 
 ### Change the like mechanic
 
-In `audience.html`, add a cooldown to the click handler:
+In `server/audience.html`, add a cooldown to the click handler:
 
 ```javascript
 var lastLike = 0;
@@ -297,7 +354,7 @@ likeBtn.addEventListener('click', function () {
 
 ### Persist likes across sessions
 
-In `server.py` on startup/shutdown:
+In `server/server.py` on startup/shutdown:
 
 ```python
 LIKES_FILE = WORKSPACE / "likes.json"
@@ -323,11 +380,11 @@ Add an HTML comment to any slide in `slides.md`:
 Content here.
 ```
 
-Then extend `md2html.py` to parse and apply the comment as an inline style on the slide `<div>`.
+Then extend `converter/md2html.py` to parse and apply the comment as an inline style on the slide `<div>`.
 
 ---
 
-## 13. Remote deployment (Hetzner VPS)
+## 14. Remote deployment (Hetzner VPS)
 
 Use `deploy.sh` to present from a public server — no venue WiFi dependency.
 
@@ -361,7 +418,7 @@ VPS_PORT=2222 VPS=root@YOUR_SERVER_IP ./deploy.sh
 Local mode still works without `VPS`:
 
 ```bash
-./deploy.sh          # same as ./convert.sh
+./deploy.sh          # auto-detects WiFi IP, converts + serves
 ```
 
 ### Hetzner firewall
@@ -383,18 +440,20 @@ Audience URL: `http://YOUR_SERVER_IP:8000/audience`
 
 ---
 
-## 14. Dependencies & credits
+## 15. Dependencies & credits
 
-> **No Reveal.js.** The slide deck is plain HTML/CSS/JS generated by `md2html.py`.
+> **No Reveal.js.** The slide deck is plain HTML/CSS/JS generated by `converter/md2html.py`.
 
-### Python (`requirements.txt`)
+### Python
 
-| Package | Role |
-|---------|------|
-| [FastAPI](https://fastapi.tiangolo.com) | HTTP + WebSocket server |
-| [uvicorn](https://www.uvicorn.org) | ASGI runner |
-| [websockets](https://websockets.readthedocs.io) | WebSocket transport (used by Starlette) |
-| [Markdown](https://python-markdown.github.io) | Markdown → HTML conversion in `md2html.py` |
+Split per service — no shared root `requirements.txt`.
+
+| File | Package | Role |
+|------|---------|------|
+| `converter/requirements.txt` | [Markdown](https://python-markdown.github.io) | Markdown → HTML in `md2html.py` |
+| `server/requirements.txt` | [FastAPI](https://fastapi.tiangolo.com) | HTTP + WebSocket server |
+| `server/requirements.txt` | [uvicorn](https://www.uvicorn.org) | ASGI runner |
+| `server/requirements.txt` | [websockets](https://websockets.readthedocs.io) | WebSocket transport |
 
 ### JavaScript (CDN, no `package.json` needed)
 

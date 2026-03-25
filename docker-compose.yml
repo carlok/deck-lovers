@@ -2,11 +2,11 @@ services:
 
   # ── Step 1 (optional): LaTeX → Markdown ──────────────────────────────────
   # Only needed when source/slides.tex is non-empty.
-  # convert.sh skips this step automatically when the file is empty.
+  # deploy.sh skips this step automatically when the file is empty.
   tex2md:
     build:
-      context: .
-      dockerfile: Dockerfile.inject
+      context: ./converter
+      dockerfile: Dockerfile
     volumes:
       - ./source:/source:ro
       - ./output:/workspace
@@ -22,22 +22,23 @@ services:
   # ── Step 2: Markdown → HTML slide deck ───────────────────────────────────
   md2html:
     build:
-      context: .
-      dockerfile: Dockerfile.inject
+      context: ./converter
+      dockerfile: Dockerfile
     volumes:
       - ./output:/workspace
     environment:
       - SERVER_HOST=${SERVER_HOST:-localhost}
       - PORT=${PORT:-8000}
+      - WS_SCHEME=${WS_SCHEME:-ws}
     profiles: ["convert"]
 
   # ── Step 3: Long-running FastAPI WebSocket server ─────────────────────────
   server:
     build:
-      context: .
-      dockerfile: Dockerfile.server
+      context: ./server
+      dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:8000"
     volumes:
       - ./output:/app/workspace
     environment:
