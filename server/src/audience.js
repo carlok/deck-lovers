@@ -1,9 +1,10 @@
 (function(){'use strict';
 
-var HOST = location.hostname;
-var PORT = location.port || '8000';
+var HOST      = location.hostname;
+var PORT      = location.port;   // empty string on default-port tunnels (Cloudflare, Caddy)
+var PORT_PART = PORT ? ':' + PORT : '';
 var WS_SCHEME = location.protocol === 'https:' ? 'wss' : 'ws'; // C4: match page scheme
-var WS_URL = WS_SCHEME + '://' + HOST + ':' + PORT + '/ws';
+var WS_URL    = WS_SCHEME + '://' + HOST + PORT_PART + '/ws';
 
 var frame    = document.getElementById('slide-frame');
 var fab      = document.getElementById('like-fab');
@@ -44,7 +45,7 @@ btnFs.addEventListener('click', toggleFullscreen);
 
 // PDF: open slides in print mode in a new tab
 document.getElementById('btn-pdf').addEventListener('click', function(){
-  window.open(location.protocol + '//' + HOST + ':' + PORT + '/#print', '_blank');
+  window.open(location.protocol + '//' + HOST + PORT_PART + '/#print', '_blank');
 });
 document.addEventListener('fullscreenchange', updateFsIcon);
 document.addEventListener('webkitfullscreenchange', updateFsIcon);
