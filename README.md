@@ -192,8 +192,8 @@ or serve it via the FastAPI server for live audience features.
 |---|---|---|
 | Local dev | `localhost` (default) | `ws` (default) |
 | LAN / in-person | `192.168.x.x` (auto-detected) | `ws` |
-| VPS, no TLS | `1.2.3.4` | `ws` |
-| Behind reverse proxy (TLS) | `slides.example.com` | `wss` |
+| VPS + Caddy, no domain | `1-2-3-4.sslip.io` | `wss` |
+| VPS + Caddy, custom domain | `slides.example.com` | `wss` |
 
 Find your LAN IP manually:
 
@@ -209,59 +209,81 @@ ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v 127
 
 ## 8. HTTPS in production
 
-The server itself speaks plain HTTP. Put a TLS-terminating reverse proxy in
-front and set `WS_SCHEME=wss` so the baked-in WebSocket URL uses `wss://`.
+The FastAPI server speaks plain HTTP on port 8000 internally. In production
+**never expose 8000 publicly** — put Caddy in front, which handles TLS
+termination, certificate renewal, WebSocket upgrade headers, and HTTP→HTTPS
+redirects automatically. Set `WS_SCHEME=wss` so the baked-in WebSocket URL
+uses `wss://`.
 
-### Caddy (recommended — automatic TLS via Let's Encrypt)
+### No domain? Use sslip.io
 
-Install Caddy on the VPS, then create `/etc/caddy/Caddyfile`:
+`sslip.io` resolves any hostname of the form `1-2-3-4.sslip.io` to the IP
+`1.2.3.4`. Caddy can obtain a real Let's Encrypt certificate for it — no DNS
+purchase or configuration required.
+
+```
+VPS IP:  1.2.3.4
+Host:    1-2-3-4.sslip.io   ← dots replaced with dashes
+```
+
+### Caddy setup (recommended)
+
+SSH into the VPS and install Caddy:
+
+```bash
+apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+  | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+  | tee /etc/apt/sources.list.d/caddy-stable.list
+apt update && apt install -y caddy
+```
+
+Create `/etc/caddy/Caddyfile` (replace `1-2-3-4` with your actual IP dashes,
+or use your own domain):
 
 ```caddyfile
-slides.example.com {
+1-2-3-4.sslip.io {
     reverse_proxy localhost:8000
 }
 ```
 
 ```bash
-systemctl reload caddy
+systemctl enable --now caddy
 ```
 
-Caddy handles certificate issuance, renewal, WebSocket upgrade headers, and
-HTTP→HTTPS redirects automatically.
-
-Deploy with TLS:
+Deploy with HTTPS:
 
 ```bash
-WS_SCHEME=wss SERVER_HOST=slides.example.com VPS=root@1.2.3.4 ./deploy.sh
+WS_SCHEME=wss SERVER_HOST=1-2-3-4.sslip.io VPS=root@1.2.3.4 ./deploy.sh
 ```
 
-### nginx
+Audience URL: `https://1-2-3-4.sslip.io/audience`
+
+> **Firewall:** open ports **80 and 443** only. Port 8000 stays closed — Caddy
+> reaches the server over `localhost`. See section 14 for Hetzner-specific steps.
+
+### nginx (alternative)
 
 ```nginx
 server {
     listen 443 ssl;
-    server_name slides.example.com;
+    server_name 1-2-3-4.sslip.io;   # or your domain
 
-    ssl_certificate     /etc/letsencrypt/live/slides.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/slides.example.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/1-2-3-4.sslip.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/1-2-3-4.sslip.io/privkey.pem;
 
     location / {
         proxy_pass         http://127.0.0.1:8000;
         proxy_http_version 1.1;
-
-        # WebSocket upgrade — required
         proxy_set_header Upgrade    $http_upgrade;
         proxy_set_header Connection "upgrade";
-
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-Proto https;
     }
 }
 ```
-
-> **Firewall:** with a reverse proxy on port 443 you can close port 8000
-> to the public — only the proxy needs to reach it on `localhost`.
 
 ---
 
@@ -423,20 +445,33 @@ Local mode still works without `VPS`:
 
 ### Hetzner firewall
 
-Open port 8000 in the **Hetzner Cloud Console** → your server → **Firewalls → Add Rule**:
+Open **ports 80 and 443** in the **Hetzner Cloud Console** → your server →
+**Firewalls → Add Rule**. Do **not** expose port 8000 publicly — Caddy
+handles all public traffic.
 
 | Direction | Protocol | Port | Source      |
 |-----------|----------|------|-------------|
-| Inbound   | TCP      | 8000 | `0.0.0.0/0` |
+| Inbound   | TCP      | 80   | `0.0.0.0/0` |
+| Inbound   | TCP      | 443  | `0.0.0.0/0` |
 
 Or via `ufw` on the server:
 
 ```bash
-ufw allow 8000/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw deny 8000/tcp   # keep the app server internal
 ufw reload
 ```
 
-Audience URL: `http://YOUR_SERVER_IP:8000/audience`
+Then follow the [Caddy setup in section 8](#8-https-in-production) to get
+automatic TLS. With `sslip.io` you don't need to buy a domain:
+
+```bash
+# Your IP 1.2.3.4 → free hostname 1-2-3-4.sslip.io
+WS_SCHEME=wss SERVER_HOST=1-2-3-4.sslip.io VPS=root@1.2.3.4 ./deploy.sh
+```
+
+Audience URL: `https://1-2-3-4.sslip.io/audience`
 
 ---
 
