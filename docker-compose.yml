@@ -1,0 +1,56 @@
+services:
+
+  # ── Step 1 (optional): LaTeX → Markdown ──────────────────────────────────
+  # Only needed when source/slides.tex is non-empty.
+  # convert.sh skips this step automatically when the file is empty.
+  tex2md:
+    build:
+      context: .
+      dockerfile: Dockerfile.inject
+    volumes:
+      - ./source:/source:ro
+      - ./output:/workspace
+    command:
+      - python
+      - tex_extract.py
+      - --input
+      - /source/slides.tex
+      - --output
+      - /workspace/slides.md
+    profiles: ["convert"]
+
+  # ── Step 2: Markdown → HTML slide deck ───────────────────────────────────
+  md2html:
+    build:
+      context: .
+      dockerfile: Dockerfile.inject
+    volumes:
+      - ./output:/workspace
+    environment:
+      - SERVER_HOST=${SERVER_HOST:-localhost}
+      - PORT=${PORT:-8000}
+    profiles: ["convert"]
+
+  # ── Step 3: Long-running FastAPI WebSocket server ─────────────────────────
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./output:/app/workspace
+    environment:
+      - PROJECTOR_SECRET=${PROJECTOR_SECRET:-}
+      - WORKSPACE_PATH=/app/workspace
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

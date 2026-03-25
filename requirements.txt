@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+websockets
+beautifulsoup4
+markdown

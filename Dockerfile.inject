@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY inject.py .
+COPY tex_extract.py .
+COPY md2html.py .
+CMD ["python", "md2html.py", \
+     "--input",  "/workspace/slides.md", \
+     "--output", "/workspace/slides.html"]
