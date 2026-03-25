@@ -465,7 +465,7 @@ function renderStats(){
 // Like update handler
 function onLikeUpdate(msg){
   likesData[msg.slide]=msg.count;
-  scheduleHearts(1);
+  scheduleHearts(5);  // burst of 5 hearts per tap (audience sends 1 like per tap)
   if(msg.slide===current){
     var el=document.getElementById('like-count');
     if(el){el.textContent=msg.count;el.classList.remove('pulse');void el.offsetWidth;el.classList.add('pulse');}
