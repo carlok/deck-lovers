@@ -81,16 +81,16 @@ else
       SERVER_HOST="localhost"
     fi
   fi
-  # --https (local): uses Caddyfile with tls internal (Caddy local CA).
-  # The LAN IP is kept as SERVER_HOST — no sslip.io needed for internal certs.
-  # One-time trust install:  podman exec $(podman ps -qf name=caddy) caddy trust
+  # --https (local): presenter's browser only — targets localhost so Chrome
+  # trusts it natively (no CA install needed).  Audience devices on the same
+  # LAN use plain HTTP at the LAN IP; that's printed separately below.
+  LAN_IP="$SERVER_HOST"   # keep LAN IP for the audience hint
   if $HTTPS && [[ "$WS_SCHEME" != "wss" ]]; then
+    SERVER_HOST="localhost"
     WS_SCHEME="wss"
     export CADDYFILE="./Caddyfile"   # tls internal
-    echo "ℹ  HTTPS (local CA) → https://$SERVER_HOST"
-    echo "   First time? Run after Caddy starts:"
-    echo "   podman exec \$(podman ps -qf name=caddy) caddy trust"
-    echo "   Then restart your browser."
+    echo "ℹ  HTTPS (local) → https://localhost  [presenter's browser only]"
+    echo "   Audience on same LAN → http://$LAN_IP:$PORT/audience  [HTTP, no cert needed]"
     echo
   fi
   HOST="$SERVER_HOST"
