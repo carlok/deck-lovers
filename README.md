@@ -154,19 +154,6 @@ Caddy obtains the cert and audience URL becomes `https://1-2-3-4.sslip.io/audien
 
 ---
 
-### Case D — Public HTTPS from your laptop (ngrok, no VM)
-
-No cloud account needed. Start the server locally, then expose it:
-
-```bash
-./deploy.sh        # starts server on :8000
-ngrok http 8000    # in a second terminal
-```
-
-Use the `https://xxxx.ngrok.io/audience` URL ngrok prints for the audience.
-
----
-
 ### Other flags
 
 ```bash
@@ -241,7 +228,6 @@ or serve it via the FastAPI server for live audience features.
 | Local HTTPS (presenter only) | `localhost` | `wss` | `./deploy.sh --https` |
 | Any cloud VM, no domain | `1-2-3-4.sslip.io` (auto) | `wss` | `VPS=… ./deploy.sh` |
 | Any cloud VM, custom domain | `slides.example.com` | `wss` | `WS_SCHEME=wss SERVER_HOST=… VPS=… ./deploy.sh` |
-| Laptop + ngrok tunnel | ngrok URL (manual) | `wss` | `./deploy.sh` + `ngrok http 8000` |
 
 Find your LAN IP manually:
 
