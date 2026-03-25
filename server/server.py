@@ -163,6 +163,14 @@ async def serve_mirror():
     return FileResponse(SLIDES_HTML, media_type="text/html")
 
 
+@app.get("/print")
+async def serve_print():
+    """Serve slides in print/PDF mode — no auth (audience can download PDF)."""
+    if not SLIDES_HTML.exists():
+        return JSONResponse(status_code=503, content={"error": "slides.html not found"})
+    return FileResponse(SLIDES_HTML, media_type="text/html")
+
+
 @app.post("/login")
 async def login(password: str = Form(...)):
     if PROJECTOR_PASSWORD and password != PROJECTOR_PASSWORD:

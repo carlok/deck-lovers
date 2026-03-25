@@ -530,34 +530,11 @@ if(PRINT){
     var el=document.getElementById(id);
     if(el)el.style.display='none';
   });
-  // Attach tap-to-like handlers to list items on the active slide
-  function attachLikeHandlers(){
-    var activeSlide=slides[current];
-    if(!activeSlide) return;
-    activeSlide.querySelectorAll('li').forEach(function(li){
-      if(li.dataset.likeAttached) return;
-      li.dataset.likeAttached='1';
-      li.style.cursor='pointer';
-      var lastTap=0;
-      li.addEventListener('click',function(){
-        var now=Date.now();
-        if(now-lastTap<600) return; // debounce double-taps
-        lastTap=now;
-        window.parent.postMessage({type:'bullet_like'},'*');
-        li.classList.add('liked-flash');
-        setTimeout(function(){li.classList.remove('liked-flash');},450);
-      });
-    });
-  }
   window.addEventListener('message',function(e){
     if(e.origin!==location.origin) return;  // I4: reject cross-origin messages
-    if(e.data&&e.data.type==='go_to_slide'){
-      showSlide(e.data.index);
-      attachLikeHandlers();
-    }
+    if(e.data&&e.data.type==='go_to_slide') showSlide(e.data.index);
   });
   showSlide(0);
-  attachLikeHandlers();
 } else {
   showSlide(0);
   connect();

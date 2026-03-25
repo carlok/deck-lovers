@@ -45,7 +45,7 @@ btnFs.addEventListener('click', toggleFullscreen);
 
 // PDF: open slides in print mode in a new tab
 document.getElementById('btn-pdf').addEventListener('click', function(){
-  window.open(location.protocol + '//' + HOST + PORT_PART + '/#print', '_blank');
+  window.open(location.protocol + '//' + HOST + PORT_PART + '/print#print', '_blank');
 });
 document.addEventListener('fullscreenchange', updateFsIcon);
 document.addEventListener('webkitfullscreenchange', updateFsIcon);
@@ -164,13 +164,6 @@ function connect(){
   ws.onerror = function(){ this.close(); }; // I7: close self, not the global ws ref
 }
 
-// Listen for bullet-tap likes coming from the slide iframe
-window.addEventListener('message', function(e){
-  if(e.origin !== location.origin) return;  // C5: reject cross-origin messages
-  if(!e.data || e.data.type !== 'bullet_like') return;
-  if(!ws || ws.readyState !== WebSocket.OPEN || !myName) return;
-  triggerBurst();
-});
 
 connect();
 })();
