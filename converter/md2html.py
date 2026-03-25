@@ -376,11 +376,13 @@ document.addEventListener('keydown',function(e){
 });
 
 var touchX=0;
-document.addEventListener('touchstart',function(e){touchX=e.changedTouches[0].clientX;},{passive:true});
-document.addEventListener('touchend',function(e){
-  var dx=e.changedTouches[0].clientX-touchX;
-  if(Math.abs(dx)>50){dx<0?showSlide(current+1):showSlide(current-1);}
-},{passive:true});
+if(!MIRROR){
+  document.addEventListener('touchstart',function(e){touchX=e.changedTouches[0].clientX;},{passive:true});
+  document.addEventListener('touchend',function(e){
+    var dx=e.changedTouches[0].clientX-touchX;
+    if(Math.abs(dx)>50){dx<0?showSlide(current+1):showSlide(current-1);}
+  },{passive:true});
+}
 
 // QR
 new QRCode(document.getElementById('qrcode'),{
