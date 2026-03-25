@@ -104,43 +104,90 @@ Slides are plain Markdown separated by `---` on its own line.
 
 ## 3. Running
 
-### Full workflow (auto-detects WiFi IP)
+### Case A — Local, plain HTTP (default)
+
+Best for trusted LAN / in-person use. No certs, no port-forwarding.
 
 ```bash
 ./deploy.sh
 ```
 
-This:
 1. Detects `podman compose` or `docker compose`
 2. Detects your WiFi IP (macOS `en0`/`en1`, Linux `ip addr`) — bakes it into the QR code
 3. Converts `slides.md` → `output/slides.html`
-4. Starts the server
+4. Starts the server at `http://<LAN-IP>:8000`
 
-### Override IP or runtime
+Audience scan the QR code and open `http://<LAN-IP>:8000/audience` on their phones.
+
+---
+
+### Case B — Local, HTTPS on `localhost` (presenter only)
+
+Useful when you need `wss://` (e.g. your browser blocks mixed content).
+Caddy issues a `tls internal` self-signed cert — Chrome trusts `localhost` natively,
+no CA install needed.
 
 ```bash
-# Both in one command
-COMPOSE="podman compose" SERVER_HOST=192.168.0.106 ./deploy.sh
+./deploy.sh --https
+```
 
-# Convert only (no server)
+- Projector browser: `https://localhost`
+- Audience on same LAN: `http://<LAN-IP>:8000/audience` (plain HTTP — still works)
+
+---
+
+### Case C — Any public cloud VM (Hetzner, DigitalOcean, AWS EC2, …)
+
+Real ACME cert via [sslip.io](https://sslip.io) — no domain purchase required.
+Ports **80** and **443** must be open on the VM.
+
+```bash
+# First time: bootstrap VM (installs podman, syncs files, builds images)
+VPS=root@YOUR_SERVER_IP ./deploy.sh --setup
+
+# Every subsequent run
+VPS=root@YOUR_SERVER_IP ./deploy.sh
+```
+
+The hostname `1.2.3.4` → `1-2-3-4.sslip.io` is auto-computed.
+Caddy obtains the cert and audience URL becomes `https://1-2-3-4.sslip.io/audience`.
+
+---
+
+### Case D — Public HTTPS from your laptop (ngrok, no VM)
+
+No cloud account needed. Start the server locally, then expose it:
+
+```bash
+./deploy.sh        # starts server on :8000
+ngrok http 8000    # in a second terminal
+```
+
+Use the `https://xxxx.ngrok.io/audience` URL ngrok prints for the audience.
+
+---
+
+### Other flags
+
+```bash
+# Convert only (no server restart)
 ./deploy.sh --convert-only
 
 # Server only (skip conversion)
 ./deploy.sh --serve-only
-```
 
-### Re-convert without restarting the server
+# Override runtime or hostname
+COMPOSE="podman compose" SERVER_HOST=192.168.0.106 ./deploy.sh
 
-```bash
-./deploy.sh --convert-only
-# Server auto-reloads on next browser refresh (reads slides.html from ./output/)
+# Custom SSH port for remote
+VPS_PORT=2222 VPS=root@YOUR_SERVER_IP ./deploy.sh
 ```
 
 ### Rebuild images after code changes
 
 ```bash
-podman compose build md2html
-podman compose build server
+docker compose build md2html
+docker compose build server
 ```
 
 ---
@@ -188,13 +235,13 @@ or serve it via the FastAPI server for live audience features.
 
 ## 7. QR code and network
 
-| Scenario | `SERVER_HOST` | `WS_SCHEME` | How |
+| Scenario | `SERVER_HOST` | `WS_SCHEME` | Command |
 |---|---|---|---|
-| Local dev | `localhost` (default) | `ws` | `./deploy.sh` |
-| LAN / in-person | `192.168.x.x` (auto-detected) | `ws` | `./deploy.sh` |
-| Local + HTTPS (port-forwarded) | `x-x-x-x.sslip.io` (auto) | `wss` | `./deploy.sh --https` |
-| VPS, no domain | `1-2-3-4.sslip.io` (auto) | `wss` | `VPS=… ./deploy.sh` |
-| VPS, custom domain | `slides.example.com` | `wss` | `WS_SCHEME=wss SERVER_HOST=… VPS=… ./deploy.sh` |
+| Local dev / in-person LAN | `192.168.x.x` (auto-detected) | `ws` | `./deploy.sh` |
+| Local HTTPS (presenter only) | `localhost` | `wss` | `./deploy.sh --https` |
+| Any cloud VM, no domain | `1-2-3-4.sslip.io` (auto) | `wss` | `VPS=… ./deploy.sh` |
+| Any cloud VM, custom domain | `slides.example.com` | `wss` | `WS_SCHEME=wss SERVER_HOST=… VPS=… ./deploy.sh` |
+| Laptop + ngrok tunnel | ngrok URL (manual) | `wss` | `./deploy.sh` + `ngrok http 8000` |
 
 Find your LAN IP manually:
 
@@ -208,62 +255,36 @@ ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v 127
 
 ---
 
-## 8. HTTPS in production
+## 8. HTTPS
 
-The FastAPI server speaks plain HTTP on port 8000 internally. In production
-**never expose 8000 publicly** — put Caddy in front, which handles TLS
-termination, certificate renewal, WebSocket upgrade headers, and HTTP→HTTPS
-redirects automatically. Set `WS_SCHEME=wss` so the baked-in WebSocket URL
-uses `wss://`.
+The FastAPI server speaks plain HTTP on port 8000 internally.
+Caddy sits in front and handles TLS termination, cert renewal, WebSocket
+upgrade headers, and HTTP→HTTPS redirects.
+**Never expose port 8000 publicly.**
 
-### No domain? Use sslip.io
+### Local HTTPS (`--https`)
 
-`sslip.io` resolves any hostname of the form `1-2-3-4.sslip.io` to the IP
-`1.2.3.4`. Caddy can obtain a real Let's Encrypt certificate for it — no DNS
-purchase or configuration required.
-
-```
-VPS IP:  1.2.3.4
-Host:    1-2-3-4.sslip.io   ← dots replaced with dashes
-```
-
-### Caddy setup (recommended)
-
-SSH into the VPS and install Caddy:
+Uses `tls internal` (Caddy self-signed cert for `localhost`).
+Chrome trusts `localhost` natively — no CA install, no port-forwarding needed.
 
 ```bash
-apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-  | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
-  | tee /etc/apt/sources.list.d/caddy-stable.list
-apt update && apt install -y caddy
+./deploy.sh --https
+# ℹ  HTTPS (local) → https://localhost  [presenter's browser only]
+#    Audience on same LAN → http://<LAN-IP>:8000/audience  [HTTP, no cert needed]
 ```
 
-Create `/etc/caddy/Caddyfile` (replace `1-2-3-4` with your actual IP dashes,
-or use your own domain):
+### Cloud VM HTTPS (sslip.io — no domain needed)
 
-```caddyfile
-1-2-3-4.sslip.io {
-    reverse_proxy localhost:8000
-}
-```
-
-```bash
-systemctl enable --now caddy
-```
-
-**Caddy is part of `docker-compose.yml`** (`profiles: ["tls"]`) — no separate
-install on the host needed. `deploy.sh` starts it automatically.
-
-Deploy with HTTPS (sslip.io is auto-computed from the VPS IP):
+`sslip.io` resolves `1-2-3-4.sslip.io` to `1.2.3.4`.
+Caddy obtains a real Let's Encrypt cert automatically.
+Ports **80** and **443** must be open on the VM; port 8000 stays closed.
 
 ```bash
 VPS=root@1.2.3.4 ./deploy.sh
-# ℹ  HTTPS auto-enabled → 1-2-3-4.sslip.io
+# → https://1-2-3-4.sslip.io  (auto-computed)
 ```
 
-Or with a real domain:
+With a real domain:
 
 ```bash
 WS_SCHEME=wss SERVER_HOST=slides.example.com VPS=root@1.2.3.4 ./deploy.sh
@@ -271,28 +292,17 @@ WS_SCHEME=wss SERVER_HOST=slides.example.com VPS=root@1.2.3.4 ./deploy.sh
 
 Audience URL: `https://1-2-3-4.sslip.io/audience`
 
-> **Firewall:** open ports **80 and 443** only. Port 8000 stays closed — Caddy
-> reaches the server over the compose network. See section 14 for Hetzner steps.
+### Caddy is bundled — no host install needed
 
-### Local dev with HTTPS (macOS / Linux)
+Caddy runs as a container (`profiles: ["tls"]` in `docker-compose.yml`).
+`deploy.sh` starts it automatically in both `--https` and remote modes.
 
-Same toolchain as production. Requires ports 80/443 forwarded to your machine
-on your router (or a public VPS used as the "local" host):
-
-```bash
-./deploy.sh --https
-# ℹ  HTTPS mode → 192-168-1-100.sslip.io  (auto-detects public IP)
-```
-
-Without port forwarding, omit `--https` and use plain HTTP — perfectly fine on
-a trusted LAN where you control the WiFi.
-
-### nginx (alternative)
+### nginx (alternative for cloud VM)
 
 ```nginx
 server {
     listen 443 ssl;
-    server_name 1-2-3-4.sslip.io;   # or your domain
+    server_name 1-2-3-4.sslip.io;
 
     ssl_certificate     /etc/letsencrypt/live/1-2-3-4.sslip.io/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/1-2-3-4.sslip.io/privkey.pem;
@@ -387,7 +397,7 @@ Add a new `---` section to `slides.md`, then `./deploy.sh --convert-only`.
 
 ### Change the like mechanic
 
-In `server/audience.html`, add a cooldown to the click handler:
+In `server/src/audience.js`, add a cooldown to the click handler:
 
 ```javascript
 var lastLike = 0;
@@ -430,73 +440,45 @@ Then extend `converter/md2html.py` to parse and apply the comment as an inline s
 
 ---
 
-## 14. Remote deployment (Hetzner VPS)
+## 14. Remote deployment (any cloud VM)
 
-Use `deploy.sh` to present from a public server — no venue WiFi dependency.
+Works on Hetzner, DigitalOcean, AWS EC2, Linode, etc. — any Ubuntu/Fedora VM
+with a public IP and ports 80 + 443 open.
 
-### First-time VPS setup
+### First-time setup
 
 ```bash
-# Bootstrap: installs podman, syncs project files, builds images
+# Installs podman on the VM, syncs project files, builds images
 VPS=root@YOUR_SERVER_IP ./deploy.sh --setup
 ```
 
 ### Deploy and present
 
 ```bash
-# Convert locally (bakes VPS IP into QR), push slides.html, restart server
+# Converts locally, pushes slides.html, restarts server + Caddy
 VPS=root@YOUR_SERVER_IP ./deploy.sh
+# → https://1-2-3-4.sslip.io  (auto-computed from your IP)
 ```
 
-### Flags
+### Firewall
+
+Open **80** and **443** only. Keep 8000 closed — Caddy proxies everything.
 
 ```bash
-# Push slides only — no server restart
-VPS=root@YOUR_SERVER_IP ./deploy.sh --convert-only
-
-# Restart server only — no re-conversion
-VPS=root@YOUR_SERVER_IP ./deploy.sh --serve-only
-
-# Custom SSH port
-VPS_PORT=2222 VPS=root@YOUR_SERVER_IP ./deploy.sh
-```
-
-Local mode still works without `VPS`:
-
-```bash
-./deploy.sh          # auto-detects WiFi IP, converts + serves
-```
-
-### Hetzner firewall
-
-Open **ports 80 and 443** in the **Hetzner Cloud Console** → your server →
-**Firewalls → Add Rule**. Do **not** expose port 8000 publicly — Caddy
-handles all public traffic.
-
-| Direction | Protocol | Port | Source      |
-|-----------|----------|------|-------------|
-| Inbound   | TCP      | 80   | `0.0.0.0/0` |
-| Inbound   | TCP      | 443  | `0.0.0.0/0` |
-
-Or via `ufw` on the server:
-
-```bash
+# ufw on the VM
 ufw allow 80/tcp
 ufw allow 443/tcp
-ufw deny 8000/tcp   # keep the app server internal
+ufw deny 8000/tcp
 ufw reload
 ```
 
-Caddy is included in `docker-compose.yml` and started automatically by
-`deploy.sh` in remote mode — no separate host install needed. With `sslip.io`
-you don't need to buy a domain:
+On Hetzner: Cloud Console → your server → **Firewalls → Add Rule** for TCP 80 and 443.
+
+### Custom domain
 
 ```bash
-# sslip.io hostname is auto-computed: 1.2.3.4 → 1-2-3-4.sslip.io
-VPS=root@1.2.3.4 ./deploy.sh
+WS_SCHEME=wss SERVER_HOST=slides.example.com VPS=root@YOUR_SERVER_IP ./deploy.sh
 ```
-
-Audience URL: `https://1-2-3-4.sslip.io/audience`
 
 ---
 
