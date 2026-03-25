@@ -113,7 +113,7 @@ _convert() {
   local host="$1"
 
   echo "▶ Building images…"
-  $COMPOSE build md2html server
+  $COMPOSE build --pull md2html server
   echo
 
   if [[ -s source/slides.tex ]]; then
@@ -134,7 +134,10 @@ _convert() {
   echo
 
   echo "▶ 2/2  md2html  output/slides.md → output/slides.html"
-  SERVER_HOST="$host" PORT="$PORT" $COMPOSE run --rm --remove-orphans md2html
+  # Remove any stale file — previous runs may have left it with a different owner
+  # (e.g. appuser/UID-1000 from an old image) that the current container can't overwrite.
+  rm -f output/slides.html
+  SERVER_HOST="$host" PORT="$PORT" WS_SCHEME="$WS_SCHEME" $COMPOSE run --rm --remove-orphans md2html
   echo "  ✓ output/slides.html ready"
   echo
 }
@@ -220,8 +223,7 @@ if command -v ufw &>/dev/null; then
 fi
 
 mkdir -p /root/deck-lovers/output
-# Converters run as UID 1000 (non-root) inside their containers — give them write access
-chown 1000:1000 /root/deck-lovers/output
+chmod 755 /root/deck-lovers/output   # root-owned; converter containers run as root too
 echo "VPS ready."
 REMOTE
     echo "  ✓ VPS bootstrapped"
