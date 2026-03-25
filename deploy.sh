@@ -220,6 +220,8 @@ if command -v ufw &>/dev/null; then
 fi
 
 mkdir -p /root/deck-lovers/output
+# Converters run as UID 1000 (non-root) inside their containers — give them write access
+chown 1000:1000 /root/deck-lovers/output
 echo "VPS ready."
 REMOTE
     echo "  ✓ VPS bootstrapped"

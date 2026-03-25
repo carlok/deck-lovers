@@ -17,6 +17,8 @@ services:
       - /source/slides.tex
       - --output
       - /workspace/slides.md
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     profiles: ["convert"]
 
   # ── Step 2: Markdown → HTML slide deck ───────────────────────────────────
@@ -30,6 +32,8 @@ services:
       - SERVER_HOST=${SERVER_HOST:-localhost}
       - PORT=${PORT:-8000}
       - WS_SCHEME=${WS_SCHEME:-ws}
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     profiles: ["convert"]
 
   # ── Step 3: Long-running FastAPI WebSocket server ─────────────────────────
@@ -40,10 +44,12 @@ services:
     ports:
       - "${PORT:-8000}:8000"   # direct access for local dev; blocked by ufw in production
     volumes:
-      - ./output:/app/workspace
+      - ./output:/app/workspace:ro   # server only reads slides — mount read-only
     environment:
       - PROJECTOR_SECRET=${PROJECTOR_SECRET:-}
       - WORKSPACE_PATH=/app/workspace
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     restart: unless-stopped
     healthcheck:
       test:
@@ -72,6 +78,9 @@ services:
       - caddy_config:/config
     environment:
       SERVER_HOST: ${SERVER_HOST:-localhost}
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]   # needed to bind ports 80/443 as non-root
     depends_on:
       - server
     restart: unless-stopped
