@@ -155,6 +155,14 @@ async def serve_slides(request: Request):
     return FileResponse(SLIDES_HTML, media_type="text/html")
 
 
+@app.get("/mirror")
+async def serve_mirror():
+    """Serve slides in read-only mirror mode — used by the audience iframe, no auth."""
+    if not SLIDES_HTML.exists():
+        return JSONResponse(status_code=503, content={"error": "slides.html not found"})
+    return FileResponse(SLIDES_HTML, media_type="text/html")
+
+
 @app.post("/login")
 async def login(password: str = Form(...)):
     if PROJECTOR_PASSWORD and password != PROJECTOR_PASSWORD:
