@@ -57,13 +57,14 @@ else
   MODE="local"
   if [[ -z "${SERVER_HOST:-}" ]]; then
     if command -v ipconfig &>/dev/null; then
-      SERVER_HOST=$(ipconfig getifaddr en0 2>/dev/null \
-                 || ipconfig getifaddr en1 2>/dev/null \
-                 || echo "localhost")
+      SERVER_HOST=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)
     else
       SERVER_HOST=$(ip -4 addr show scope global 2>/dev/null \
-                    | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1 \
-                    || echo "localhost")
+                    | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1 || true)
+    fi
+    if [[ -z "$SERVER_HOST" ]]; then                             # M3: warn on fallback
+      echo "⚠  Could not detect WiFi IP — QR code will use 'localhost'" >&2
+      SERVER_HOST="localhost"
     fi
   fi
   HOST=${SERVER_HOST}
@@ -174,7 +175,7 @@ REMOTE
     echo
 
     echo "▶ Building images on VPS…"
-    $SSH "$VPS" "cd /root/deck-lovers && podman compose build md2html server"
+    $SSH "$VPS" "cd /root/deck-lovers && ${COMPOSE} build md2html server"  # C6: use detected runtime
     echo "  ✓ images built"
     echo
   fi
@@ -191,7 +192,7 @@ REMOTE
   # ── Start / restart server on VPS ─────────────────────────────────────────
   if $SERVE; then
     echo "▶ Restarting server on VPS…"
-    $SSH "$VPS" "cd /root/deck-lovers && podman compose up server -d --remove-orphans"
+    $SSH "$VPS" "cd /root/deck-lovers && ${COMPOSE} up server -d --remove-orphans"  # C6
     echo "  ✓ server running"
     echo
   fi

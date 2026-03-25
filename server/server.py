@@ -187,7 +187,7 @@ async def websocket_endpoint(ws: WebSocket):
                             "recent": like_list[-5:],
                         }))
 
-            elif mtype == "slides_meta":
+            elif mtype == "slides_meta" and is_projector:          # C1: projector-only
                 incoming = msg.get("slides", [])
                 if incoming:
                     # Merge/replace — safe to re-send on reconnect (S2 fix)
@@ -195,7 +195,8 @@ async def websocket_endpoint(ws: WebSocket):
                     slides_total = len(slides_meta)
 
             elif mtype == "slide_change" and is_projector:
-                current_slide = int(msg.get("index", 0))
+                idx = int(msg.get("index", 0))                     # I2: bounds-check
+                current_slide = max(0, min(idx, max(slides_total - 1, 0)))
                 m = _meta(current_slide)
                 await _broadcast_audience({
                     "type": "slide_update",
@@ -207,7 +208,7 @@ async def websocket_endpoint(ws: WebSocket):
 
             elif mtype == "like":
                 slide_idx = int(msg.get("slide", current_slide))
-                user = msg.get("user") or username
+                user = username                                     # I1: ignore spoofable client field
                 bucket = likes.setdefault(slide_idx, [])
                 if len(bucket) < LIKES_CAP:  # C3 fix: cap at 1000
                     bucket.append(user)

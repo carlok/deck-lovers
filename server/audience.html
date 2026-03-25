@@ -178,7 +178,8 @@ html,body{height:100%;overflow:hidden;background:#111;font-family:system-ui,sans
 
 var HOST = location.hostname;
 var PORT = location.port || '8000';
-var WS_URL = 'ws://' + HOST + ':' + PORT + '/ws';
+var WS_SCHEME = location.protocol === 'https:' ? 'wss' : 'ws'; // C4: match page scheme
+var WS_URL = WS_SCHEME + '://' + HOST + ':' + PORT + '/ws';
 
 var frame    = document.getElementById('slide-frame');
 var fab      = document.getElementById('like-fab');
@@ -244,18 +245,16 @@ window.addEventListener('resize', scheduleScale);
 if(screen.orientation) screen.orientation.addEventListener('change', scheduleScale);
 scaleFrame();
 
-// Show iframe once it loads
+// Show iframe once it loads (FAB only shown after name assigned — I6)
 frame.addEventListener('load', function(){
   loading.hidden = true;
   frame.hidden   = false;
-  fab.hidden     = false;
-  // Immediately sync to current slide (server will push on WS connect)
 });
 
 // ── Drive iframe slide ────────────────────────────────────
 function goToSlide(n){
   currentIdx = n;
-  frame.contentWindow.postMessage({type:'go_to_slide', index:n}, '*');
+  frame.contentWindow.postMessage({type:'go_to_slide', index:n}, location.origin); // C5 target
 }
 
 // ── Like button ───────────────────────────────────────────
@@ -290,10 +289,13 @@ function connect(){
       myName = msg.name;
       badge.textContent = '👤 ' + myName;
       badge.hidden = false;
-      setTimeout(function(){ badge.style.opacity = '1'; }, 50);
+      requestAnimationFrame(function(){  // M4: rAF more reliable than setTimeout(50)
+        requestAnimationFrame(function(){ badge.style.opacity = '1'; });
+      });
+      fab.hidden = false;               // I6: show FAB only once name is confirmed
     }
     else if(msg.type === 'slide_update'){
-      goToSlide(msg.index || 0);
+      goToSlide(msg.index != null ? msg.index : 0);  // I8: 0 is valid, don't coerce
     }
     else if(msg.type === 'projector_status'){
       projWarn.classList.toggle('show', !msg.connected);
@@ -301,16 +303,19 @@ function connect(){
   };
 
   ws.onclose = function(){
+    if(ws !== this) return;            // I7: stale socket — a newer one took over
+    ws = null;
     reconnEl.hidden = false;
-    setTimeout(connect, reconnDelay);
     reconnDelay = Math.min(reconnDelay * 2, 30000);
+    setTimeout(connect, reconnDelay);
   };
 
-  ws.onerror = function(){ ws.close(); };
+  ws.onerror = function(){ this.close(); }; // I7: close self, not the global ws ref
 }
 
 // Listen for bullet-tap likes coming from the slide iframe
 window.addEventListener('message', function(e){
+  if(e.origin !== location.origin) return;  // C5: reject cross-origin messages
   if(!e.data || e.data.type !== 'bullet_like') return;
   if(!ws || ws.readyState !== WebSocket.OPEN || !myName) return;
   ws.send(JSON.stringify({type:'like', user:myName, slide:currentIdx}));

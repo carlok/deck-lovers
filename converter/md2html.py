@@ -25,20 +25,26 @@ SERVER_HOST = os.getenv("SERVER_HOST", "localhost")
 PORT        = os.getenv("PORT", "8000")
 WS_SCHEME   = os.getenv("WS_SCHEME", "ws")   # set to "wss" behind TLS
 
-# Behind a reverse proxy the port is handled by the proxy — omit it from URLs
-_port       = f":{PORT}" if WS_SCHEME == "ws" else ""
+# Behind a reverse proxy the port is handled by the proxy — omit default ports (M2)
+_default_port = "443" if WS_SCHEME == "wss" else "80"
+_port         = "" if PORT == _default_port else f":{PORT}"
 HTTP_SCHEME = "https" if WS_SCHEME == "wss" else "http"
 WS_URL      = f"{WS_SCHEME}://{SERVER_HOST}{_port}/ws"
 AUDIENCE_URL = f"{HTTP_SCHEME}://{SERVER_HOST}{_port}/audience"
 
 # ── YouTube ───────────────────────────────────────────────────────────────────
 
+_YT_ID_RE = re.compile(r'^[a-zA-Z0-9_-]{11}$')
+
 def _yt_id(url_or_id: str) -> str:
     m = re.search(r'(?:v=|youtu\.be/|embed/)([a-zA-Z0-9_-]{11})', url_or_id)
-    return m.group(1) if m else url_or_id.strip()
+    vid = m.group(1) if m else url_or_id.strip()
+    return vid if _YT_ID_RE.match(vid) else ''   # C2: reject non-ID fallbacks
 
 def _yt_block(title: str, url: str) -> str:
     vid   = _yt_id(url)
+    if not vid:                                   # C2: skip invalid IDs entirely
+        return f'<p><em>Invalid YouTube URL: {_esc.escape(url)}</em></p>'
     label = _esc.escape(title or "Video")
     return (
         f'<div class="yt-wrap">'
@@ -95,8 +101,8 @@ def _md(text: str) -> str:
 
 def parse_slides(raw: str) -> list[str]:
     raw = raw.replace("\r\n", "\n").replace("\r", "\n")
-    # Strip optional YAML front matter
-    raw = re.sub(r'^---\n.*?\n---\n', '', raw, count=1, flags=re.DOTALL)
+    # Strip optional YAML front matter (require at least one non-separator line — I3)
+    raw = re.sub(r'^---\n(?!---).+?\n---\n', '', raw, count=1, flags=re.DOTALL)
     parts = re.split(r'\n[ \t]*---[ \t]*\n', raw)
     return [p.strip() for p in parts if p.strip()]
 
@@ -431,9 +437,17 @@ function renderStats(){
     var pct=Math.round(r.count/maxC*100);
     var row=document.createElement('div');
     row.className='stats-row';
-    row.innerHTML='<span class="stats-label" title="'+r.title+'">'+r.title+'</span>'
-      +'<div class="stats-bar-bg"><div class="stats-bar" data-pct="'+pct+'">'
-      +(r.count>0?r.count:'')+'</div></div>';
+    // C3: build DOM nodes — never inject raw title into innerHTML
+    var label=document.createElement('span');
+    label.className='stats-label';
+    label.title=r.title;
+    label.textContent=r.title;
+    var barBg=document.createElement('div');barBg.className='stats-bar-bg';
+    var bar=document.createElement('div');bar.className='stats-bar';
+    bar.dataset.pct=pct;
+    if(r.count>0)bar.textContent=r.count;
+    barBg.appendChild(bar);
+    row.appendChild(label);row.appendChild(barBg);
     chart.appendChild(row);
   });
   requestAnimationFrame(function(){
@@ -530,6 +544,7 @@ if(PRINT){
     });
   }
   window.addEventListener('message',function(e){
+    if(e.origin!==location.origin) return;  // I4: reject cross-origin messages
     if(e.data&&e.data.type==='go_to_slide'){
       showSlide(e.data.index);
       attachLikeHandlers();
@@ -686,7 +701,8 @@ def main() -> None:
     args = p.parse_args()
 
     try:
-        raw = open(args.input, encoding="utf-8").read()
+        with open(args.input, encoding="utf-8") as f:   # M1: context manager
+            raw = f.read()
     except FileNotFoundError:
         print(f"ERROR: {args.input} not found", file=sys.stderr)
         sys.exit(1)
@@ -702,7 +718,8 @@ def main() -> None:
 
     html = build_html(slide_texts, doc_title=args.title)
 
-    open(args.output, "w", encoding="utf-8").write(html)
+    with open(args.output, "w", encoding="utf-8") as f:  # M1: context manager
+        f.write(html)
     print(f"[md2html] → {args.output}")
 
 
