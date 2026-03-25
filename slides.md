@@ -118,6 +118,29 @@ Learn more: [arxiv.org/abs/2307.09009](https://arxiv.org/abs/2307.09009)
 
 ---
 
+## Connect
+
+<div class="icon-links">
+  <a class="icon-link" href="https://github.com/username">
+    <i class="fa-brands fa-github"></i>
+    <span>github.com/username</span>
+  </a>
+  <a class="icon-link" href="https://example.com">
+    <i class="fa-solid fa-globe"></i>
+    <span>example.com</span>
+  </a>
+  <a class="icon-link" href="https://linkedin.com/in/username">
+    <i class="fa-brands fa-linkedin"></i>
+    <span>linkedin.com/in/username</span>
+  </a>
+  <div class="icon-link icon-qr">
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com/contact&bgcolor=FAFAF8&color=1A2333" alt="Contact form QR">
+    <span>Contact form</span>
+  </div>
+</div>
+
+---
+
 ## Open questions 🔭
 
 - How do we measure **real understanding** vs pattern matching?

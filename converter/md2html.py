@@ -202,6 +202,19 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
 .slide tbody tr:hover{background:#FFF0F2;}
 .slide tbody td{padding:.5em .9em;border-bottom:1px solid var(--border);vertical-align:top;}
 
+/* Icon link grid — contact / links slide */
+.icon-links{display:flex;justify-content:center;align-items:flex-start;
+  gap:clamp(1.5rem,4vw,4rem);flex-wrap:wrap;margin-top:1.2em;}
+.icon-link{display:flex;flex-direction:column;align-items:center;gap:.5em;
+  color:var(--dark);text-decoration:none;border:none;
+  transition:color .15s,transform .18s;}
+.icon-link:hover{color:var(--accent);transform:translateY(-4px);border:none;}
+.icon-link i{font-size:clamp(2.4rem,5vw,4rem);}
+.icon-link span{font-size:clamp(.75rem,1.3vw,.95rem);font-weight:600;
+  color:var(--muted);text-align:center;}
+.icon-qr img{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.13);
+  width:clamp(120px,14vw,180px);height:auto;}
+
 /* YouTube */
 .yt-wrap{position:relative;width:100%;max-width:min(960px,88vw);aspect-ratio:16/9;
   border-radius:14px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.18);margin:.4em 0;}
