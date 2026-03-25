@@ -13,6 +13,10 @@ venv/
 .podman/
 .docker/
 
+# Node
+node_modules/
+npm-debug.log*
+
 # Editor / OS
 .DS_Store
 .idea/
@@ -20,3 +24,8 @@ venv/
 *.swp
 *.swo
 test-results/
+
+# Caddyfile — Caddyfile and Caddyfile.prod are committed (contain no secrets).
+# Only local personal overrides are ignored:
+Caddyfile.local
+Caddyfile.*.local

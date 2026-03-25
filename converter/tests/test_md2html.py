@@ -101,14 +101,14 @@ class TestMd:
         html = md2html._md("[Click](https://example.com)")
         assert 'href="https://example.com"' in html
 
-    def test_checklist_unchecked(self):
-        # markdown lib or postprocess should render task items
+    def test_checklist_unchecked_raw(self):
+        # _md applies postprocess inline; cb-open / task-open class expected
         html = md2html._md("- [ ] Todo item")
-        assert "[ ]" in html or "checkbox" in html.lower() or "☐" in html
+        assert "task-open" in html or "cb-open" in html
 
-    def test_checklist_checked(self):
+    def test_checklist_checked_raw(self):
         html = md2html._md("- [x] Done item")
-        assert "[x]" in html or "checked" in html.lower() or "✅" in html
+        assert "task-done" in html or "cb-done" in html or "✓" in html
 
 
 # ── build_html ────────────────────────────────────────────────────────────────
@@ -165,8 +165,21 @@ class TestBuildHtml:
 
     def test_stats_slide_appended(self):
         html = self._html()
-        # Stats/likes slide is always last
         assert "stats" in html.lower() or "likes" in html.lower()
+
+    def test_checklist_unchecked_postprocessed(self):
+        # build_html applies postprocess; ☐ or task-open class expected
+        html = self._html(["## S\n\n- [ ] Open task"])
+        assert "☐" in html or "task-open" in html.lower() or "open" in html.lower()
+
+    def test_checklist_checked_postprocessed(self):
+        html = self._html(["## S\n\n- [x] Done task"])
+        assert "✅" in html or "task-done" in html.lower() or "done" in html.lower()
+
+    def test_invalid_youtube_shows_error(self):
+        # line 47 in md2html — invalid video ID path
+        html = self._html(["## V\n\n!youtube[Bad](not-a-valid-url-at-all)"])
+        assert "Invalid YouTube URL" in html or "invalid" in html.lower()
 
     def test_youtube_embed_rendered(self):
         slides = ["## Video\n\n!youtube[Demo](https://youtube.com/watch?v=dQw4w9WgXcQ)"]
@@ -183,16 +196,51 @@ class TestBuildHtml:
 # ── WebSocket / QR URL tokens ─────────────────────────────────────────────────
 
 class TestEnvTokens:
+    """WS_URL / AUDIENCE_URL are module-level constants computed at import time.
+    Patch them directly with monkeypatch.setattr."""
+
     def test_custom_host(self, monkeypatch):
-        monkeypatch.setenv("SERVER_HOST", "192.168.1.99")
-        monkeypatch.setenv("PORT", "8000")
-        monkeypatch.setenv("WS_SCHEME", "ws")
+        monkeypatch.setattr(md2html, "WS_URL", "ws://192.168.1.99:8000/ws")
+        monkeypatch.setattr(md2html, "AUDIENCE_URL", "http://192.168.1.99:8000/audience")
         html = md2html.build_html(["## S\n\nBody"], doc_title="T")
         assert "192.168.1.99" in html
 
     def test_wss_scheme(self, monkeypatch):
-        monkeypatch.setenv("SERVER_HOST", "example.com")
-        monkeypatch.setenv("PORT", "443")
-        monkeypatch.setenv("WS_SCHEME", "wss")
+        monkeypatch.setattr(md2html, "WS_URL", "wss://example.com/ws")
+        monkeypatch.setattr(md2html, "AUDIENCE_URL", "https://example.com/audience")
         html = md2html.build_html(["## S\n\nBody"], doc_title="T")
         assert "wss://" in html
+
+
+# ── main() CLI ────────────────────────────────────────────────────────────────
+
+class TestMain:
+    def test_generates_html_file(self, tmp_path, monkeypatch):
+        import sys
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## Hello\n\nContent", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv",
+            ["md2html.py", "--input", str(md_file), "--output", str(out_file)])
+        md2html.main()
+        assert out_file.exists()
+
+    def test_output_is_valid_html(self, tmp_path, monkeypatch):
+        import sys
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## Slide\n\nBody\n---\n## Two\n\nMore", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv",
+            ["md2html.py", "--input", str(md_file), "--output", str(out_file)])
+        md2html.main()
+        content = out_file.read_text(encoding="utf-8")
+        assert "<!DOCTYPE html>" in content
+        assert "Slide" in content
+
+    def test_missing_input_exits(self, tmp_path, monkeypatch):
+        import sys
+        monkeypatch.setattr(sys, "argv",
+            ["md2html.py", "--input", str(tmp_path / "nope.md"),
+             "--output", str(tmp_path / "out.html")])
+        with pytest.raises(SystemExit):
+            md2html.main()

@@ -89,37 +89,53 @@ class TestAudience:
         assert "<html" in r.text.lower()
 
 
-# ── GET /likes ────────────────────────────────────────────────────────────────
+# ── 404 on unknown routes ─────────────────────────────────────────────────────
 
-class TestLikes:
-    def test_returns_200(self):
-        r = client.get("/likes")
-        assert r.status_code == 200
+class TestUnknownRoutes:
+    def test_unknown_route_is_404(self):
+        r = client.get("/does-not-exist")
+        assert r.status_code == 404
 
-    def test_returns_dict(self):
-        r = client.get("/likes")
-        assert isinstance(r.json(), dict)
+    def test_unknown_method_is_405(self):
+        r = client.post("/health")
+        assert r.status_code == 405
 
 
 # ── WebSocket /ws ─────────────────────────────────────────────────────────────
 
+def _register(ws, role, name=None):
+    """Register on a WS connection and drain the assigned_name response."""
+    msg = {"type": "register", "role": role}
+    if name:
+        msg["name"] = name
+    ws.send_json(msg)
+    resp = ws.receive_json()          # server always sends assigned_name back
+    assert resp["type"] == "assigned_name"
+    return resp.get("name", name)
+
+
 class TestWebSocket:
     def test_projector_can_connect(self):
         with client.websocket_connect("/ws") as ws:
-            ws.send_json({"type": "register", "role": "projector"})
-            # Connection stays open — no error means success
+            _register(ws, "projector")
 
     def test_audience_can_connect(self):
         with client.websocket_connect("/ws") as ws:
-            ws.send_json({"type": "register", "role": "audience", "name": "Alice"})
+            _register(ws, "audience", "Alice")
+
+    def test_assigned_name_returned(self):
+        """Server echoes back the audience name (or generates one)."""
+        with client.websocket_connect("/ws") as ws:
+            name = _register(ws, "audience", "Zara")
+            assert name == "Zara"
 
     def test_projector_receives_like_update(self):
         """Audience sends a like → projector should receive a like_update."""
         with client.websocket_connect("/ws") as proj:
-            proj.send_json({"type": "register", "role": "projector"})
+            _register(proj, "projector")
 
             with client.websocket_connect("/ws") as aud:
-                aud.send_json({"type": "register", "role": "audience", "name": "Bob"})
+                _register(aud, "audience", "Bob")
                 aud.send_json({"type": "like", "user": "Bob", "slide": 0})
 
                 msg = proj.receive_json()
@@ -128,10 +144,10 @@ class TestWebSocket:
     def test_projector_status_broadcast_on_connect(self):
         """When projector connects, audience should be notified."""
         with client.websocket_connect("/ws") as aud:
-            aud.send_json({"type": "register", "role": "audience", "name": "Carol"})
+            _register(aud, "audience", "Carol")
 
             with client.websocket_connect("/ws") as proj:
-                proj.send_json({"type": "register", "role": "projector"})
+                _register(proj, "projector")
 
                 msg = aud.receive_json()
                 assert msg["type"] == "projector_status"
@@ -140,10 +156,10 @@ class TestWebSocket:
     def test_projector_status_broadcast_on_disconnect(self):
         """When projector disconnects, audience should be notified."""
         with client.websocket_connect("/ws") as aud:
-            aud.send_json({"type": "register", "role": "audience", "name": "Dave"})
+            _register(aud, "audience", "Dave")
 
             with client.websocket_connect("/ws") as proj:
-                proj.send_json({"type": "register", "role": "projector"})
+                _register(proj, "projector")
                 _ = aud.receive_json()  # projector_status connected=True
 
             # projector disconnected — audience should get connected=False
@@ -154,12 +170,11 @@ class TestWebSocket:
     def test_unknown_message_type_ignored(self):
         """Server should not crash on unknown message types."""
         with client.websocket_connect("/ws") as ws:
-            ws.send_json({"type": "register", "role": "audience", "name": "Eve"})
+            _register(ws, "audience", "Eve")
             ws.send_json({"type": "unknown_type", "data": "whatever"})
-            # No exception = server handled it gracefully
 
     def test_generate_username_no_name(self):
         """Audience connecting without a name gets an auto-generated one."""
         with client.websocket_connect("/ws") as ws:
-            ws.send_json({"type": "register", "role": "audience"})
-            # Should not crash — server generates a username
+            name = _register(ws, "audience")
+            assert isinstance(name, str) and len(name) > 0

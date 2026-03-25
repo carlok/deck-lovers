@@ -1,0 +1,19 @@
+{
+  "name": "deck-lovers-server-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jest tests for audience.pure.js",
+  "scripts": {
+    "test": "jest --coverage"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/tests/js/**/*.test.js"],
+    "collectCoverageFrom": ["<rootDir>/src/*.pure.js"],
+    "coverageDirectory": "/reports/server-js",
+    "coverageReporters": ["text", "html"]
+  }
+}

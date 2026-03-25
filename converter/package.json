@@ -1,0 +1,19 @@
+{
+  "name": "deck-lovers-converter-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jest tests for slides.pure.js",
+  "scripts": {
+    "test": "jest --coverage"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/tests/js/**/*.test.js"],
+    "collectCoverageFrom": ["<rootDir>/src/*.pure.js"],
+    "coverageDirectory": "/reports/converter-js",
+    "coverageReporters": ["text", "html"]
+  }
+}
