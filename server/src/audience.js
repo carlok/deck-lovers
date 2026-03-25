@@ -121,9 +121,10 @@ function triggerBurst(){
   toast.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function(){ toast.classList.remove('show'); }, 2000);
+  sendLike();  // 1 like counted on server; hearts are display only
   for(var i = 0; i < BURST_COUNT; i++){
     (function(i){
-      setTimeout(function(){ sendLike(); spawnHeart(); }, i * BURST_MS);
+      setTimeout(spawnHeart, i * BURST_MS);
     })(i);
   }
 }

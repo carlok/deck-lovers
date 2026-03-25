@@ -314,15 +314,16 @@ li.liked-flash{animation:li-like .45s ease-out forwards;border-radius:6px;}
 }
 
 @media print{
-  @page{size:1280px 720px;margin:0;}
+  @page{size:33.87cm 19.05cm;margin:0;}  /* 16:9 landscape: 1280×720 at 96dpi */
   #nav,#qr-overlay,#like-sidebar,#progress,#reconnect{display:none!important;}
-  html,body{height:auto;overflow:visible;background:#fff;}
-  #deck{position:static;height:auto;}
+  html,body{width:33.87cm;height:auto;overflow:visible;background:#fff;}
+  #deck{position:static;width:33.87cm;height:auto;}
   .slide{
     position:relative!important;opacity:1!important;transform:none!important;
     pointer-events:auto!important;display:flex!important;
-    width:1280px;height:720px;
+    width:33.87cm;height:19.05cm;
     page-break-after:always;break-after:page;
+    overflow:hidden;box-sizing:border-box;
   }
 }
 """
