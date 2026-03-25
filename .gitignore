@@ -19,3 +19,4 @@ venv/
 .vscode/
 *.swp
 *.swo
+test-results/

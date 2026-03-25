@@ -86,6 +86,28 @@ services:
     restart: unless-stopped
     profiles: ["tls"]
 
+  # ── Test: converter unit tests + coverage ────────────────────────────────
+  test-converter:
+    build:
+      context: ./converter
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./test-results:/reports
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    profiles: ["test"]
+
+  # ── Test: server unit tests + coverage ───────────────────────────────────
+  test-server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./test-results:/reports
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    profiles: ["test"]
+
 volumes:
   caddy_data:
   caddy_config:
