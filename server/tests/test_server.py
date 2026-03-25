@@ -16,13 +16,15 @@ pathlib.Path(_tmp, "slides.html").write_text(
     encoding="utf-8",
 )
 os.environ["WORKSPACE_PATH"] = _tmp
+os.environ.setdefault("PROJECTOR_PASSWORD", "testpass")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from fastapi.testclient import TestClient
-from server import app
+from server import app, PROJECTOR_PASSWORD
 
 client = TestClient(app)
+_AUTH = {"proj_auth": PROJECTOR_PASSWORD}  # cookie used by projector-page tests
 
 
 # ── /health ───────────────────────────────────────────────────────────────────
@@ -52,23 +54,42 @@ class TestHealth:
 
 # ── GET / (slides) ────────────────────────────────────────────────────────────
 
+class TestAuth:
+    def test_no_cookie_returns_401(self):
+        r = client.get("/")
+        assert r.status_code == 401
+
+    def test_wrong_password_returns_401(self):
+        r = client.post("/login", data={"password": "wrong"})
+        assert r.status_code == 401
+
+    def test_correct_password_redirects(self):
+        r = client.post("/login", data={"password": PROJECTOR_PASSWORD},
+                        follow_redirects=False)
+        assert r.status_code == 303
+        assert r.headers["location"] == "/"
+
+    def test_correct_password_sets_cookie(self):
+        r = client.post("/login", data={"password": PROJECTOR_PASSWORD},
+                        follow_redirects=False)
+        assert "proj_auth" in r.cookies
+
+
 class TestSlides:
     def test_returns_200(self):
-        r = client.get("/")
+        r = client.get("/", cookies=_AUTH)
         assert r.status_code == 200
 
     def test_content_type_html(self):
-        r = client.get("/")
+        r = client.get("/", cookies=_AUTH)
         assert "text/html" in r.headers["content-type"]
 
     def test_body_contains_slides_content(self):
-        r = client.get("/")
+        r = client.get("/", cookies=_AUTH)
         assert "Test Slides" in r.text
 
     def test_missing_slides_returns_503(self, tmp_path, monkeypatch):
         monkeypatch.setenv("WORKSPACE_PATH", str(tmp_path))
-        # Re-import is not straightforward; test that missing file is handled
-        # by directly checking the path existence logic
         empty_workspace = tmp_path  # no slides.html here
         assert not (empty_workspace / "slides.html").exists()
 

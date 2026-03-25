@@ -47,6 +47,7 @@ services:
       - ./output:/app/workspace:ro   # server only reads slides — mount read-only
     environment:
       - PROJECTOR_SECRET=${PROJECTOR_SECRET:-}
+      - PROJECTOR_PASSWORD=${PROJECTOR_PASSWORD:-admin}
       - WORKSPACE_PATH=/app/workspace
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]

@@ -9,8 +9,8 @@ import random
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, Form, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
 app = FastAPI(title="Presentation Server")
 
@@ -18,7 +18,8 @@ WORKSPACE = Path(os.getenv("WORKSPACE_PATH", "/app/workspace"))
 SLIDES_HTML = WORKSPACE / "slides.html"
 AUDIENCE_HTML = Path(__file__).parent / "audience.html"
 AUDIENCE_SRC  = Path(__file__).parent / "src"
-PROJECTOR_SECRET = os.getenv("PROJECTOR_SECRET", "")  # Optional; set to require auth
+PROJECTOR_SECRET   = os.getenv("PROJECTOR_SECRET", "")    # Optional WS projector auth
+PROJECTOR_PASSWORD = os.getenv("PROJECTOR_PASSWORD", "admin")  # Page password ("" = off)
 LIKES_CAP = 1000  # Max recorded likes per slide (C3 fix)
 
 # ── Server state ──────────────────────────────────────────────────────────────
@@ -104,9 +105,42 @@ async def _send_projector(msg: dict) -> None:
         projector_ws = None
 
 
+# ── Auth helpers ──────────────────────────────────────────────────────────────
+_LOGIN_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Projector login</title>
+<style>
+  body{{background:#111;color:#eee;font-family:sans-serif;
+        display:flex;align-items:center;justify-content:center;height:100vh;margin:0}}
+  form{{display:flex;flex-direction:column;gap:12px;width:260px}}
+  input{{padding:10px;font-size:1rem;border-radius:6px;border:1px solid #444;background:#222;color:#eee}}
+  button{{padding:10px;font-size:1rem;border-radius:6px;border:none;
+          background:#4a9eff;color:#fff;cursor:pointer}}
+  .err{{color:#f66;font-size:.9rem;text-align:center}}
+</style></head>
+<body>
+<form method="post" action="/login">
+  <h2 style="margin:0 0 4px;text-align:center">🎤 Projector</h2>
+  <input type="password" name="password" placeholder="Password" autofocus>
+  <button type="submit">Enter</button>
+  {error}
+</form>
+</body></html>"""
+
+def _auth_ok(request: Request) -> bool:
+    """Return True if password protection is off or cookie matches."""
+    if not PROJECTOR_PASSWORD:
+        return True
+    return request.cookies.get("proj_auth") == PROJECTOR_PASSWORD
+
+
 # ── HTTP routes ───────────────────────────────────────────────────────────────
 @app.get("/")
-async def serve_slides():
+async def serve_slides(request: Request):
+    if not _auth_ok(request):
+        return HTMLResponse(_LOGIN_HTML.format(error=""), status_code=401)
     if not SLIDES_HTML.exists():
         return JSONResponse(
             status_code=503,
@@ -119,6 +153,16 @@ async def serve_slides():
             },
         )
     return FileResponse(SLIDES_HTML, media_type="text/html")
+
+
+@app.post("/login")
+async def login(password: str = Form(...)):
+    if PROJECTOR_PASSWORD and password != PROJECTOR_PASSWORD:
+        err = '<p class="err">Wrong password.</p>'
+        return HTMLResponse(_LOGIN_HTML.format(error=err), status_code=401)
+    resp = RedirectResponse(url="/", status_code=303)
+    resp.set_cookie("proj_auth", PROJECTOR_PASSWORD, httponly=True, samesite="strict")
+    return resp
 
 
 @app.get("/audience")
