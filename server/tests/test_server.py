@@ -125,19 +125,21 @@ class TestUnknownRoutes:
 # ── WebSocket /ws ─────────────────────────────────────────────────────────────
 
 def _register(ws, role):
-    """Connect as a given role and drain the two greeting messages sent on connect.
+    """Connect as a given role and drain the three greeting messages sent on connect.
 
     The server immediately sends:
       1. {"type": "assigned_name", "name": <auto>}
       2. {"type": "slide_update", ...}
+      3. {"type": "projector_status", "connected": <bool>}
     For projector role we also send register_projector so the server treats
     this connection as the projector.
     """
-    # Drain the two greeting messages sent on every connect
     msg1 = ws.receive_json()
     assert msg1["type"] == "assigned_name"
     msg2 = ws.receive_json()
     assert msg2["type"] == "slide_update"
+    msg3 = ws.receive_json()
+    assert msg3["type"] == "projector_status"
 
     if role == "projector":
         ws.send_json({"type": "register_projector"})

@@ -211,7 +211,7 @@ async def websocket_endpoint(ws: WebSocket):
     username = generate_username()
     clients[ws] = username
 
-    # Greet immediately with assigned name + current slide state
+    # Greet immediately with assigned name + current slide state + projector status
     await ws.send_text(json.dumps({"type": "assigned_name", "name": username}))
     m = _meta(current_slide)
     await ws.send_text(json.dumps({
@@ -220,6 +220,10 @@ async def websocket_endpoint(ws: WebSocket):
         "total": slides_total,
         "title": m["title"],
         "summary": m["summary"],
+    }))
+    await ws.send_text(json.dumps({
+        "type": "projector_status",
+        "connected": projector_ws is not None,
     }))
 
     try:

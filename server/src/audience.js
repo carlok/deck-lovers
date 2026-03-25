@@ -130,10 +130,7 @@ function connect(){
   ws.onopen = function(){
     reconnDelay = 1000;
     reconnEl.hidden = true;
-    // Check projector status immediately
-    fetch('/health').then(function(r){return r.json();}).then(function(d){
-      projWarn.classList.toggle('show', !d.projector_connected);
-    }).catch(function(){});
+    // Server sends projector_status immediately on join — no fetch needed
   };
 
   ws.onmessage = function(e){
