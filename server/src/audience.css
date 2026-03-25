@@ -13,6 +13,15 @@ html,body{height:100%;overflow:hidden;background:#111;font-family:system-ui,sans
   background:#FAFAF8;
 }
 
+/* ── Full-screen tap overlay (above iframe, below all UI buttons) ── */
+#tap-overlay{
+  position:fixed;inset:0;
+  z-index:10;
+  background:transparent;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+}
+
 /* ── Like FAB ── */
 #like-fab{
   position:fixed;
@@ -36,10 +45,10 @@ html,body{height:100%;overflow:hidden;background:#111;font-family:system-ui,sans
 /* ── Floating burst hearts ── */
 .heart-fly{
   position:fixed;
-  bottom:80px;right:46px;
   font-size:1.6rem;
   pointer-events:none;
   z-index:1000;
+  transform:translate(-50%,-50%);  /* centre on tap point */
   opacity:1;
   animation:heart-rise var(--dur,0.9s) ease-out forwards;
 }

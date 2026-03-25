@@ -6,14 +6,15 @@ var PORT_PART = PORT ? ':' + PORT : '';
 var WS_SCHEME = location.protocol === 'https:' ? 'wss' : 'ws'; // C4: match page scheme
 var WS_URL    = WS_SCHEME + '://' + HOST + PORT_PART + '/ws';
 
-var frame    = document.getElementById('slide-frame');
-var fab      = document.getElementById('like-fab');
-var toast    = document.getElementById('toast');
-var badge    = document.getElementById('badge');
-var loading  = document.getElementById('loading');
-var reconnEl = document.getElementById('reconnect');
-var projWarn = document.getElementById('proj-warn');
-var btnFs    = document.getElementById('btn-fs');
+var frame      = document.getElementById('slide-frame');
+var fab        = document.getElementById('like-fab');
+var tapOverlay = document.getElementById('tap-overlay');
+var toast      = document.getElementById('toast');
+var badge      = document.getElementById('badge');
+var loading    = document.getElementById('loading');
+var reconnEl   = document.getElementById('reconnect');
+var projWarn   = document.getElementById('proj-warn');
+var btnFs      = document.getElementById('btn-fs');
 
 var myName      = '';
 var currentIdx  = 0;
@@ -86,12 +87,22 @@ function goToSlide(n){
 var BURST_COUNT = 5;   // hearts spawned + likes sent per tap
 var BURST_MS    = 80;  // ms between each heart/like
 
+var _tapX = window.innerWidth / 2;   // last tap X (default: center)
+var _tapY = window.innerHeight / 2;  // last tap Y
+
+tapOverlay.addEventListener('click', function(e){
+  _tapX = e.clientX;
+  _tapY = e.clientY;
+}, true);  // capture phase so coords are set before triggerBurst
+
 function spawnHeart(){
   var el = document.createElement('span');
   el.className = 'heart-fly';
   el.textContent = '❤️';
-  var dx = (Math.random() - 0.5) * 60;        // –30 … +30 px horizontal drift
-  var dur = (0.7 + Math.random() * 0.5) + 's'; // 0.7–1.2 s rise
+  var dx = (Math.random() - 0.5) * 60;
+  var dur = (0.7 + Math.random() * 0.5) + 's';
+  el.style.left = _tapX + 'px';
+  el.style.top  = _tapY + 'px';
   el.style.setProperty('--dx', dx.toFixed(0) + 'px');
   el.style.setProperty('--dur', dur);
   document.body.appendChild(el);
@@ -117,8 +128,8 @@ function triggerBurst(){
   }
 }
 
-// ── Like button ───────────────────────────────────────────
-fab.addEventListener('click', function(){
+// ── Tap anywhere on slide area to send love ───────────────
+tapOverlay.addEventListener('click', function(){
   if(!ws || ws.readyState !== WebSocket.OPEN || !myName) return;
   triggerBurst();
 });
