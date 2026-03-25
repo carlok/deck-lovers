@@ -33,6 +33,22 @@ html,body{height:100%;overflow:hidden;background:#111;font-family:system-ui,sans
 #like-fab.pop{animation:fab-pop .35s cubic-bezier(.4,0,.2,1);}
 @keyframes fab-pop{0%{transform:scale(1)}40%{transform:scale(1.28)}100%{transform:scale(1)}}
 
+/* ── Floating burst hearts ── */
+.heart-fly{
+  position:fixed;
+  bottom:80px;right:46px;
+  font-size:1.6rem;
+  pointer-events:none;
+  z-index:1000;
+  opacity:1;
+  animation:heart-rise var(--dur,0.9s) ease-out forwards;
+}
+@keyframes heart-rise{
+  0%  {transform:translate(var(--dx,0px),0)      scale(1);   opacity:1;}
+  60% {opacity:1;}
+  100%{transform:translate(var(--dx,0px),-180px) scale(.5);  opacity:0;}
+}
+
 /* ── Sent toast ── */
 #toast{
   position:fixed;

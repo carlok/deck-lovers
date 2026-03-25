@@ -81,16 +81,45 @@ function goToSlide(n){
   frame.contentWindow.postMessage({type:'go_to_slide', index:n}, location.origin); // C5 target
 }
 
-// ── Like button ───────────────────────────────────────────
-fab.addEventListener('click', function(){
+// ── Burst helpers ─────────────────────────────────────────
+var BURST_COUNT = 5;   // hearts spawned + likes sent per tap
+var BURST_MS    = 80;  // ms between each heart/like
+
+function spawnHeart(){
+  var el = document.createElement('span');
+  el.className = 'heart-fly';
+  el.textContent = '❤️';
+  var dx = (Math.random() - 0.5) * 60;        // –30 … +30 px horizontal drift
+  var dur = (0.7 + Math.random() * 0.5) + 's'; // 0.7–1.2 s rise
+  el.style.setProperty('--dx', dx.toFixed(0) + 'px');
+  el.style.setProperty('--dur', dur);
+  document.body.appendChild(el);
+  el.addEventListener('animationend', function(){ el.remove(); });
+}
+
+function sendLike(){
   if(!ws || ws.readyState !== WebSocket.OPEN || !myName) return;
   ws.send(JSON.stringify({type:'like', user:myName, slide:currentIdx}));
+}
+
+function triggerBurst(){
   fab.classList.remove('pop');
   void fab.offsetWidth;
   fab.classList.add('pop');
   toast.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(function(){ toast.classList.remove('show'); }, 1500);
+  toastTimer = setTimeout(function(){ toast.classList.remove('show'); }, 2000);
+  for(var i = 0; i < BURST_COUNT; i++){
+    (function(i){
+      setTimeout(function(){ sendLike(); spawnHeart(); }, i * BURST_MS);
+    })(i);
+  }
+}
+
+// ── Like button ───────────────────────────────────────────
+fab.addEventListener('click', function(){
+  if(!ws || ws.readyState !== WebSocket.OPEN || !myName) return;
+  triggerBurst();
 });
 
 // ── WebSocket (audience role) ─────────────────────────────
@@ -142,13 +171,7 @@ window.addEventListener('message', function(e){
   if(e.origin !== location.origin) return;  // C5: reject cross-origin messages
   if(!e.data || e.data.type !== 'bullet_like') return;
   if(!ws || ws.readyState !== WebSocket.OPEN || !myName) return;
-  ws.send(JSON.stringify({type:'like', user:myName, slide:currentIdx}));
-  fab.classList.remove('pop');
-  void fab.offsetWidth;
-  fab.classList.add('pop');
-  toast.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(function(){ toast.classList.remove('show'); }, 1500);
+  triggerBurst();
 });
 
 connect();
