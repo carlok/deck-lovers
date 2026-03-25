@@ -1,17 +1,16 @@
 FROM python:3.11-slim
 WORKDIR /app
 
-# Drop privileges — run as non-root (UID/GID 1000)
-RUN addgroup --system --gid 1000 appuser \
- && adduser  --system --uid 1000 --ingroup appuser --no-create-home appuser
+# Converters run as root — they are ephemeral batch jobs with no network ports.
+# They only touch the explicitly-mounted /workspace volume, so UID alignment
+# with the host is the only thing that matters (handled by convert.sh / --setup).
+# Non-root is enforced on the long-running server container instead.
 
-COPY --chown=appuser:appuser requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY --chown=appuser:appuser tex_extract.py .
-COPY --chown=appuser:appuser md2html.py .
-
-USER appuser
+COPY tex_extract.py .
+COPY md2html.py .
 
 CMD ["python", "md2html.py", \
      "--input",  "/workspace/slides.md", \
