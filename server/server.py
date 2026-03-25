@@ -17,6 +17,7 @@ app = FastAPI(title="Presentation Server")
 WORKSPACE = Path(os.getenv("WORKSPACE_PATH", "/app/workspace"))
 SLIDES_HTML = WORKSPACE / "slides.html"
 AUDIENCE_HTML = Path(__file__).parent / "audience.html"
+AUDIENCE_SRC  = Path(__file__).parent / "src"
 PROJECTOR_SECRET = os.getenv("PROJECTOR_SECRET", "")  # Optional; set to require auth
 LIKES_CAP = 1000  # Max recorded likes per slide (C3 fix)
 
@@ -125,6 +126,22 @@ async def serve_audience():
     if not AUDIENCE_HTML.exists():
         return JSONResponse(status_code=503, content={"error": "audience.html missing"})
     return FileResponse(AUDIENCE_HTML, media_type="text/html")
+
+
+@app.get("/audience.css")
+async def serve_audience_css():
+    f = AUDIENCE_SRC / "audience.css"
+    if not f.exists():
+        return JSONResponse(status_code=503, content={"error": "audience.css missing"})
+    return FileResponse(f, media_type="text/css")
+
+
+@app.get("/audience.js")
+async def serve_audience_js():
+    f = AUDIENCE_SRC / "audience.js"
+    if not f.exists():
+        return JSONResponse(status_code=503, content={"error": "audience.js missing"})
+    return FileResponse(f, media_type="application/javascript")
 
 
 @app.get("/health")

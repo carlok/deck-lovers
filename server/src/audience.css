@@ -1,0 +1,145 @@
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--accent:#E94560;--dark:#1A2333;--warn:#F39C12;}
+html,body{height:100%;overflow:hidden;background:#111;font-family:system-ui,sans-serif;}
+
+/* ── Iframe fills viewport, scaled by JS ── */
+#slide-frame{
+  position:fixed;
+  top:0;left:0;
+  width:1280px;height:720px;
+  border:none;
+  transform-origin:top left;
+  /* transform set by JS */
+  background:#FAFAF8;
+}
+
+/* ── Like FAB ── */
+#like-fab{
+  position:fixed;
+  bottom:28px;right:28px;
+  z-index:999;
+  width:72px;height:72px;
+  border-radius:50%;
+  background:var(--accent);
+  color:#fff;font-size:2rem;
+  border:none;cursor:pointer;
+  box-shadow:0 6px 24px rgba(233,69,96,.5);
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .15s,box-shadow .15s;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+}
+#like-fab:active{transform:scale(.88);box-shadow:0 2px 10px rgba(233,69,96,.3);}
+#like-fab.pop{animation:fab-pop .35s cubic-bezier(.4,0,.2,1);}
+@keyframes fab-pop{0%{transform:scale(1)}40%{transform:scale(1.28)}100%{transform:scale(1)}}
+
+/* ── Sent toast ── */
+#toast{
+  position:fixed;
+  bottom:112px;right:28px;
+  background:rgba(26,35,51,.9);
+  color:#fff;font-size:.82rem;font-weight:600;
+  padding:6px 14px;border-radius:20px;
+  opacity:0;transform:translateY(6px);
+  transition:opacity .2s,transform .2s;
+  pointer-events:none;z-index:999;
+  white-space:nowrap;
+}
+#toast.show{opacity:1;transform:translateY(0);}
+
+/* ── Name badge ── */
+#badge{
+  position:fixed;
+  top:14px;left:50%;transform:translateX(-50%);
+  background:rgba(26,35,51,.82);
+  color:rgba(255,255,255,.85);
+  font-size:.75rem;font-weight:600;
+  padding:5px 16px;border-radius:20px;
+  z-index:999;white-space:nowrap;
+  backdrop-filter:blur(8px);
+  opacity:0;transition:opacity .4s;
+}
+
+/* ── PDF download button ── */
+#btn-pdf{
+  position:fixed;
+  bottom:28px;left:28px;
+  z-index:999;
+  background:rgba(26,35,51,.75);
+  color:rgba(255,255,255,.7);
+  border:none;border-radius:10px;
+  padding:0 14px;height:40px;font-size:.75rem;font-weight:700;
+  letter-spacing:.06em;
+  display:flex;align-items:center;gap:6px;
+  cursor:pointer;backdrop-filter:blur(8px);
+  -webkit-tap-highlight-color:transparent;
+}
+#btn-pdf:active{background:rgba(26,35,51,.95);}
+
+/* ── Fullscreen button ── */
+#btn-fs{
+  position:fixed;
+  top:14px;right:14px;
+  z-index:999;
+  background:rgba(26,35,51,.75);
+  color:rgba(255,255,255,.7);
+  border:none;border-radius:10px;
+  width:40px;height:40px;font-size:1.1rem;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;backdrop-filter:blur(8px);
+  -webkit-tap-highlight-color:transparent;
+}
+#btn-fs:active{background:rgba(26,35,51,.95);}
+
+/* ── Projector offline warning ── */
+#proj-warn{
+  position:fixed;
+  bottom:112px;left:50%;transform:translateX(-50%);
+  background:rgba(243,156,18,.9);color:#fff;
+  font-size:.75rem;font-weight:600;
+  padding:5px 14px;border-radius:20px;
+  z-index:999;white-space:nowrap;
+  display:none;
+}
+#proj-warn.show{display:flex;align-items:center;gap:5px;}
+
+/* ── Reconnect pill ── */
+#reconnect{
+  position:fixed;
+  top:14px;left:50%;transform:translateX(-50%);
+  background:var(--warn);color:#fff;
+  font-size:.75rem;font-weight:600;
+  padding:5px 16px;border-radius:20px;
+  z-index:999;display:flex;align-items:center;gap:6px;
+  animation:pulse-warn 1.6s ease-in-out infinite;
+}
+#reconnect[hidden]{display:none!important;}
+@keyframes pulse-warn{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* ── Rotate hint (portrait only) ── */
+#rotate-hint{
+  position:fixed;inset:0;z-index:9998;
+  background:#111;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:18px;color:rgba(255,255,255,.7);font-size:1rem;text-align:center;
+  padding:2rem;
+}
+#rotate-hint .icon{font-size:3.5rem;animation:rock 1.4s ease-in-out infinite;}
+@keyframes rock{0%,100%{transform:rotate(-20deg)}50%{transform:rotate(20deg)}}
+@media(orientation:landscape){#rotate-hint{display:none!important;}}
+
+/* ── Loading ── */
+#loading{
+  position:fixed;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:14px;
+  color:rgba(255,255,255,.5);font-size:.9rem;
+}
+.spinner{
+  width:34px;height:34px;
+  border:3px solid rgba(255,255,255,.15);
+  border-top-color:var(--accent);
+  border-radius:50%;
+  animation:spin .75s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}

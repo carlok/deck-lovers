@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=appuser:appuser server.py .
 COPY --chown=appuser:appuser audience.html .
+COPY --chown=appuser:appuser src/ ./src/
 
 USER appuser
 EXPOSE 8000
