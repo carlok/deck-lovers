@@ -116,6 +116,13 @@ _convert() {
   $COMPOSE build --pull md2html server
   echo
 
+  # Ensure the output dir exists and is writable by any container UID.
+  # With rootless Podman the directory may have been created by a previous
+  # container running as a different UID (e.g. old appuser/1000), making it
+  # unwritable even by "root" inside the new container.
+  mkdir -p output
+  chmod 777 output
+
   if [[ -s source/slides.tex ]]; then
     echo "▶ 1/2  tex2md   slides.tex → output/slides.md"
     $COMPOSE run --rm --remove-orphans tex2md
