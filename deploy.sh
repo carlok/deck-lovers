@@ -172,18 +172,53 @@ if [[ "$MODE" == "remote" ]]; then
     echo "▶ Bootstrapping VPS…"
     $SSH "$VPS" bash <<'REMOTE'
 set -euo pipefail
+
+# ── Package manager helper ────────────────────────────────
+_apt() { apt-get install -y --no-install-recommends "$@"; }
+_dnf() { dnf install -y "$@"; }
+
+# ── podman ────────────────────────────────────────────────
 if ! command -v podman &>/dev/null; then
   if command -v apt-get &>/dev/null; then
-    apt-get update -qq && apt-get install -y podman
+    apt-get update -qq && _apt podman
   elif command -v dnf &>/dev/null; then
-    dnf install -y podman
+    _dnf podman
   else
     echo "ERROR: cannot install podman — do it manually" >&2; exit 1
   fi
 fi
-if ! command -v podman-compose &>/dev/null; then
-  pip3 install podman-compose -q 2>/dev/null || pip install podman-compose -q
+
+# ── podman compose (prefer built-in plugin v4+, fall back to pip package) ─
+if ! podman compose version &>/dev/null 2>&1; then
+  if command -v apt-get &>/dev/null; then
+    # python3-podman-compose is in Ubuntu repos; avoids PEP-668 pip restrictions
+    apt-get update -qq && _apt python3-podman-compose 2>/dev/null \
+      || { _apt python3-pip 2>/dev/null; \
+           pip3 install podman-compose --break-system-packages -q 2>/dev/null \
+           || pip3 install podman-compose -q; }
+  elif command -v dnf &>/dev/null; then
+    _dnf python3-pip && pip3 install podman-compose -q
+  fi
 fi
+
+# ── rsync (required for project file sync from local machine) ─────────────
+if ! command -v rsync &>/dev/null; then
+  if command -v apt-get &>/dev/null; then
+    _apt rsync
+  elif command -v dnf &>/dev/null; then
+    _dnf rsync
+  fi
+fi
+
+# ── firewall ──────────────────────────────────────────────
+if command -v ufw &>/dev/null; then
+  ufw allow 80/tcp   comment 'Caddy HTTP'  >/dev/null
+  ufw allow 443/tcp  comment 'Caddy HTTPS' >/dev/null
+  ufw deny  8000/tcp comment 'app internal only' >/dev/null
+  ufw --force enable >/dev/null
+  echo "  ufw: 80/443 open, 8000 blocked"
+fi
+
 mkdir -p /root/deck-lovers/output
 echo "VPS ready."
 REMOTE
@@ -191,6 +226,7 @@ REMOTE
     echo
 
     echo "▶ Syncing project files to VPS…"
+    command -v rsync &>/dev/null || { echo "ERROR: rsync not found locally (brew install rsync)" >&2; exit 1; }
     rsync -az --progress \
       -e "$SSH" \
       --exclude='.git' \
