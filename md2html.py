@@ -259,6 +259,13 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 @keyframes slide-in-r{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 
+/* Bullet like flash (mirror mode) */
+@keyframes li-like{
+  0%  {background:rgba(233,69,96,.22);transform:translateX(5px);}
+  100%{background:transparent;transform:translateX(0);}
+}
+li.liked-flash{animation:li-like .45s ease-out forwards;border-radius:6px;}
+
 /* Hearts */
 .heart{position:fixed;font-size:1.8rem;pointer-events:none;z-index:9999;
   animation:float-up 2.4s ease-out forwards;will-change:transform,opacity;}
@@ -458,10 +465,33 @@ if(MIRROR){
     var el=document.getElementById(id);
     if(el)el.style.display='none';
   });
+  // Attach tap-to-like handlers to list items on the active slide
+  function attachLikeHandlers(){
+    var activeSlide=slides[current];
+    if(!activeSlide) return;
+    activeSlide.querySelectorAll('li').forEach(function(li){
+      if(li.dataset.likeAttached) return;
+      li.dataset.likeAttached='1';
+      li.style.cursor='pointer';
+      var lastTap=0;
+      li.addEventListener('click',function(){
+        var now=Date.now();
+        if(now-lastTap<600) return; // debounce double-taps
+        lastTap=now;
+        window.parent.postMessage({type:'bullet_like'},'*');
+        li.classList.add('liked-flash');
+        setTimeout(function(){li.classList.remove('liked-flash');},450);
+      });
+    });
+  }
   window.addEventListener('message',function(e){
-    if(e.data&&e.data.type==='go_to_slide') showSlide(e.data.index);
+    if(e.data&&e.data.type==='go_to_slide'){
+      showSlide(e.data.index);
+      attachLikeHandlers();
+    }
   });
   showSlide(0);
+  attachLikeHandlers();
 } else {
   showSlide(0);
   connect();
