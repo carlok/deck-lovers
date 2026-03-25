@@ -157,8 +157,9 @@ class TestBuildHtml:
 
     def test_landscape_print_css(self):
         html = self._html()
-        assert "1280px" in html
-        assert "720px" in html
+        # Page size now in physical cm units (16:9 landscape)
+        assert "33.87cm" in html
+        assert "19.05cm" in html
 
     def test_font_awesome_cdn(self):
         html = self._html()
