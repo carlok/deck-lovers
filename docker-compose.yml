@@ -38,7 +38,7 @@ services:
       context: ./server
       dockerfile: Dockerfile
     ports:
-      - "${PORT:-8000}:8000"
+      - "${PORT:-8000}:8000"   # direct access for local dev; blocked by ufw in production
     volumes:
       - ./output:/app/workspace
     environment:
@@ -55,3 +55,28 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # ── Step 4 (optional, profile=tls): Caddy TLS termination ─────────────────
+  # Handles HTTPS/WSS, auto-provisions Let's Encrypt certs for public domains
+  # (including *.sslip.io) and uses an internal CA for IPs / localhost.
+  # Start with: deploy.sh (remote, auto) or deploy.sh --https (local)
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      SERVER_HOST: ${SERVER_HOST:-localhost}
+    depends_on:
+      - server
+    restart: unless-stopped
+    profiles: ["tls"]
+
+volumes:
+  caddy_data:
+  caddy_config:

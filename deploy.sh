@@ -16,7 +16,8 @@
 #   VPS_PORT     SSH port (default 22)
 #   PORT         app port (default 8000)
 #   COMPOSE      override compose runtime (default: auto-detect)
-#   SERVER_HOST  override IP/hostname baked into QR code
+#   SERVER_HOST  override hostname baked into QR code (remote: auto-sslip.io)
+#   WS_SCHEME    ws or wss (remote: auto wss; local --https: auto wss)
 
 set -euo pipefail
 
@@ -24,17 +25,20 @@ set -euo pipefail
 CONVERT=true
 SERVE=true
 SETUP=false
+HTTPS=false
 for arg in "$@"; do
   case "$arg" in
     --convert-only) SERVE=false ;;
     --serve-only)   CONVERT=false ;;
     --setup)        SETUP=true ;;
+    --https)        HTTPS=true ;;
   esac
 done
 
 PORT=${PORT:-8000}
 VPS_SSH_PORT=${VPS_PORT:-22}
 VPS=${VPS:-}
+WS_SCHEME=${WS_SCHEME:-ws}
 
 # ── Detect compose runtime ────────────────────────────────────────────────────
 if [[ -z "${COMPOSE:-}" ]]; then
@@ -48,11 +52,19 @@ if [[ -z "${COMPOSE:-}" ]]; then
   fi
 fi
 
+# ── sslip.io helper: 1.2.3.4 → 1-2-3-4.sslip.io ─────────────────────────────
+_to_sslip() { echo "${1//./-}.sslip.io"; }
+
 # ── Detect mode + HOST ────────────────────────────────────────────────────────
 if [[ -n "$VPS" ]]; then
   MODE="remote"
   VPS_IP=$(echo "$VPS" | cut -d@ -f2)
-  HOST=${SERVER_HOST:-$VPS_IP}
+  # Auto-HTTPS: compute sslip.io hostname from VPS IP unless caller overrides
+  if [[ -z "${SERVER_HOST:-}" ]]; then
+    SERVER_HOST=$(_to_sslip "$VPS_IP")
+    WS_SCHEME="wss"
+  fi
+  HOST="$SERVER_HOST"
 else
   MODE="local"
   if [[ -z "${SERVER_HOST:-}" ]]; then
@@ -62,12 +74,23 @@ else
       SERVER_HOST=$(ip -4 addr show scope global 2>/dev/null \
                     | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1 || true)
     fi
-    if [[ -z "$SERVER_HOST" ]]; then                             # M3: warn on fallback
+    if [[ -z "$SERVER_HOST" ]]; then
       echo "⚠  Could not detect WiFi IP — QR code will use 'localhost'" >&2
       SERVER_HOST="localhost"
     fi
   fi
-  HOST=${SERVER_HOST}
+  # --https: get public IP → sslip.io (requires port 80/443 forwarded to this machine)
+  if $HTTPS && [[ "$WS_SCHEME" != "wss" ]]; then
+    _PUB=$(curl -sf --connect-timeout 3 https://api.ipify.org 2>/dev/null || true)
+    if [[ -n "$_PUB" ]]; then
+      SERVER_HOST=$(_to_sslip "$_PUB")
+      WS_SCHEME="wss"
+      echo "ℹ  HTTPS mode → $SERVER_HOST  (needs ports 80/443 forwarded to this machine)"
+    else
+      echo "⚠  Could not detect public IP — falling back to HTTP" >&2
+    fi
+  fi
+  HOST="$SERVER_HOST"
 fi
 
 # ── Banner ────────────────────────────────────────────────────────────────────
@@ -120,13 +143,17 @@ _convert() {
 _endpoints() {
   local h="$1"
   local show_hint="${2:-false}"
+  # Use scheme-aware URLs: https/wss when Caddy/TLS is active
+  local WS="$WS_SCHEME"
+  local HTTP="http"; [[ "$WS" == "wss" ]] && HTTP="https"
+  local P=":$PORT";  [[ "$WS" == "wss" ]] && P=""   # standard port — omit from URL
   echo "┌─────────────────────────────────────────────────────────────┐"
   echo "│                      ENDPOINTS                              │"
   echo "├──────────────┬──────────────────────────────────────────────┤"
-  printf "│  %-12s│  http://%-36s│\n" "Projector"  "$h:$PORT"
-  printf "│  %-12s│  http://%-36s│\n" "Audience"   "$h:$PORT/audience"
-  printf "│  %-12s│  http://%-36s│\n" "Health"     "$h:$PORT/health"
-  printf "│  %-12s│  ws://%-38s│\n"   "WebSocket"  "$h:$PORT/ws"
+  printf "│  %-12s│  %-44s│\n" "Projector"  "$HTTP://$h$P"
+  printf "│  %-12s│  %-44s│\n" "Audience"   "$HTTP://$h$P/audience"
+  printf "│  %-12s│  %-44s│\n" "Health"     "$HTTP://$h$P/health"
+  printf "│  %-12s│  %-44s│\n" "WebSocket"  "$WS://$h$P/ws"
   if [[ "$show_hint" == "true" ]]; then
     echo "├──────────────┴──────────────────────────────────────────────┤"
     echo "│  QR code bottom-left of projector view  ·  Ctrl-C to stop  │"
@@ -189,11 +216,11 @@ REMOTE
     echo
   fi
 
-  # ── Start / restart server on VPS ─────────────────────────────────────────
+  # ── Start / restart server + Caddy on VPS ────────────────────────────────
   if $SERVE; then
     echo "▶ Restarting server on VPS…"
-    $SSH "$VPS" "cd /root/deck-lovers && ${COMPOSE} up server -d --remove-orphans"  # C6
-    echo "  ✓ server running"
+    $SSH "$VPS" "cd /root/deck-lovers && ${COMPOSE} --profile tls up server caddy -d --remove-orphans"
+    echo "  ✓ server + Caddy running (https)"
     echo
   fi
 
@@ -210,7 +237,11 @@ else
 
   if $SERVE; then
     _endpoints "$HOST" true
-    $COMPOSE up server
+    if [[ "$WS_SCHEME" == "wss" ]]; then
+      $COMPOSE --profile tls up caddy server   # local --https mode
+    else
+      $COMPOSE up server                        # plain HTTP (default local)
+    fi
   else
     _endpoints "$HOST"
   fi

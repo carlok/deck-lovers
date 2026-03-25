@@ -188,12 +188,13 @@ or serve it via the FastAPI server for live audience features.
 
 ## 7. QR code and network
 
-| Scenario | `SERVER_HOST` | `WS_SCHEME` |
-|---|---|---|
-| Local dev | `localhost` (default) | `ws` (default) |
-| LAN / in-person | `192.168.x.x` (auto-detected) | `ws` |
-| VPS + Caddy, no domain | `1-2-3-4.sslip.io` | `wss` |
-| VPS + Caddy, custom domain | `slides.example.com` | `wss` |
+| Scenario | `SERVER_HOST` | `WS_SCHEME` | How |
+|---|---|---|---|
+| Local dev | `localhost` (default) | `ws` | `./deploy.sh` |
+| LAN / in-person | `192.168.x.x` (auto-detected) | `ws` | `./deploy.sh` |
+| Local + HTTPS (port-forwarded) | `x-x-x-x.sslip.io` (auto) | `wss` | `./deploy.sh --https` |
+| VPS, no domain | `1-2-3-4.sslip.io` (auto) | `wss` | `VPS=… ./deploy.sh` |
+| VPS, custom domain | `slides.example.com` | `wss` | `WS_SCHEME=wss SERVER_HOST=… VPS=… ./deploy.sh` |
 
 Find your LAN IP manually:
 
@@ -252,16 +253,39 @@ or use your own domain):
 systemctl enable --now caddy
 ```
 
-Deploy with HTTPS:
+**Caddy is part of `docker-compose.yml`** (`profiles: ["tls"]`) — no separate
+install on the host needed. `deploy.sh` starts it automatically.
+
+Deploy with HTTPS (sslip.io is auto-computed from the VPS IP):
 
 ```bash
-WS_SCHEME=wss SERVER_HOST=1-2-3-4.sslip.io VPS=root@1.2.3.4 ./deploy.sh
+VPS=root@1.2.3.4 ./deploy.sh
+# ℹ  HTTPS auto-enabled → 1-2-3-4.sslip.io
+```
+
+Or with a real domain:
+
+```bash
+WS_SCHEME=wss SERVER_HOST=slides.example.com VPS=root@1.2.3.4 ./deploy.sh
 ```
 
 Audience URL: `https://1-2-3-4.sslip.io/audience`
 
 > **Firewall:** open ports **80 and 443** only. Port 8000 stays closed — Caddy
-> reaches the server over `localhost`. See section 14 for Hetzner-specific steps.
+> reaches the server over the compose network. See section 14 for Hetzner steps.
+
+### Local dev with HTTPS (macOS / Linux)
+
+Same toolchain as production. Requires ports 80/443 forwarded to your machine
+on your router (or a public VPS used as the "local" host):
+
+```bash
+./deploy.sh --https
+# ℹ  HTTPS mode → 192-168-1-100.sslip.io  (auto-detects public IP)
+```
+
+Without port forwarding, omit `--https` and use plain HTTP — perfectly fine on
+a trusted LAN where you control the WiFi.
 
 ### nginx (alternative)
 
@@ -463,12 +487,13 @@ ufw deny 8000/tcp   # keep the app server internal
 ufw reload
 ```
 
-Then follow the [Caddy setup in section 8](#8-https-in-production) to get
-automatic TLS. With `sslip.io` you don't need to buy a domain:
+Caddy is included in `docker-compose.yml` and started automatically by
+`deploy.sh` in remote mode — no separate host install needed. With `sslip.io`
+you don't need to buy a domain:
 
 ```bash
-# Your IP 1.2.3.4 → free hostname 1-2-3-4.sslip.io
-WS_SCHEME=wss SERVER_HOST=1-2-3-4.sslip.io VPS=root@1.2.3.4 ./deploy.sh
+# sslip.io hostname is auto-computed: 1.2.3.4 → 1-2-3-4.sslip.io
+VPS=root@1.2.3.4 ./deploy.sh
 ```
 
 Audience URL: `https://1-2-3-4.sslip.io/audience`

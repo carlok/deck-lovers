@@ -1,0 +1,11 @@
+# deck-lovers — Caddy reverse proxy
+#
+# SERVER_HOST is injected by deploy.sh / docker-compose.yml:
+#   • bare IP or localhost  → Caddy uses its internal local CA (self-signed)
+#   • public domain / sslip.io → Caddy obtains a real Let's Encrypt certificate
+#
+# No manual cert management needed in either case.
+
+{$SERVER_HOST} {
+    reverse_proxy server:8000
+}
