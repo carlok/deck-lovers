@@ -173,11 +173,14 @@ async def login(password: str = Form(...)):
     return resp
 
 
+_NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
+
+
 @app.get("/audience")
 async def serve_audience():
     if not AUDIENCE_HTML.exists():
         return JSONResponse(status_code=503, content={"error": "audience.html missing"})
-    return FileResponse(AUDIENCE_HTML, media_type="text/html")
+    return FileResponse(AUDIENCE_HTML, media_type="text/html", headers=_NO_CACHE)
 
 
 @app.get("/audience.css")
@@ -185,7 +188,7 @@ async def serve_audience_css():
     f = AUDIENCE_SRC / "audience.css"
     if not f.exists():
         return JSONResponse(status_code=503, content={"error": "audience.css missing"})
-    return FileResponse(f, media_type="text/css")
+    return FileResponse(f, media_type="text/css", headers=_NO_CACHE)
 
 
 @app.get("/audience.js")
@@ -193,7 +196,7 @@ async def serve_audience_js():
     f = AUDIENCE_SRC / "audience.js"
     if not f.exists():
         return JSONResponse(status_code=503, content={"error": "audience.js missing"})
-    return FileResponse(f, media_type="application/javascript")
+    return FileResponse(f, media_type="application/javascript", headers=_NO_CACHE)
 
 
 @app.get("/health")
