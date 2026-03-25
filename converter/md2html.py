@@ -306,6 +306,17 @@ li.liked-flash{animation:li-like .45s ease-out forwards;border-radius:6px;}
   .slide{padding:2vh 4vw 10vh;}
   #qr-overlay,#like-sidebar{display:none;}
 }
+
+@media print{
+  #nav,#qr-overlay,#like-sidebar,#progress,#reconnect{display:none!important;}
+  html,body{height:auto;overflow:visible;background:#fff;}
+  #deck{position:static;height:auto;}
+  .slide{
+    position:relative!important;opacity:1!important;transform:none!important;
+    pointer-events:auto!important;display:flex!important;
+    height:100vh;page-break-after:always;break-after:page;
+  }
+}
 """
 
 # JS uses __TOKENS__ replaced in Python (avoids escaping all JS { } as {{ }})
@@ -316,6 +327,7 @@ var WS_URL='__WS_URL__';
 var AUDIENCE_URL='__AUDIENCE_URL__';
 var TOTAL=__TOTAL__;
 var MIRROR=location.hash==='#mirror';
+var PRINT=location.hash==='#print';
 var current=0;
 var ws=null;
 var reconnectDelay=1000;
@@ -477,7 +489,22 @@ function connect(){
   ws.onerror=function(){ws.close();};
 }
 
-if(MIRROR){
+if(PRINT){
+  // Print mode: show all slides stacked, trigger browser print dialog
+  ['nav','qr-overlay','like-sidebar','progress','reconnect'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el)el.style.display='none';
+  });
+  var deck=document.getElementById('deck');
+  deck.style.cssText='position:static;height:auto;';
+  slides.forEach(function(s){
+    s.style.cssText='position:relative;opacity:1;transform:none;pointer-events:auto;display:flex;height:100vh;page-break-after:always;break-after:page;';
+  });
+  // Wait for fonts, images and MathJax/viz.js to settle before printing
+  window.addEventListener('load',function(){
+    setTimeout(function(){ window.print(); },1200);
+  });
+} else if(MIRROR){
   // Mirror mode: hide all projector chrome, receive postMessage from parent
   ['nav','qr-overlay','like-sidebar','progress','reconnect'].forEach(function(id){
     var el=document.getElementById(id);

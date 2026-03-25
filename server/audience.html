@@ -69,6 +69,22 @@ html,body{height:100%;overflow:hidden;background:#111;font-family:system-ui,sans
   opacity:0;transition:opacity .4s;
 }
 
+/* ── PDF download button ── */
+#btn-pdf{
+  position:fixed;
+  bottom:28px;left:28px;
+  z-index:999;
+  background:rgba(26,35,51,.75);
+  color:rgba(255,255,255,.7);
+  border:none;border-radius:10px;
+  padding:0 14px;height:40px;font-size:.75rem;font-weight:700;
+  letter-spacing:.06em;
+  display:flex;align-items:center;gap:6px;
+  cursor:pointer;backdrop-filter:blur(8px);
+  -webkit-tap-highlight-color:transparent;
+}
+#btn-pdf:active{background:rgba(26,35,51,.95);}
+
 /* ── Fullscreen button ── */
 #btn-fs{
   position:fixed;
@@ -150,6 +166,7 @@ html,body{height:100%;overflow:hidden;background:#111;font-family:system-ui,sans
         sandbox="allow-scripts allow-same-origin"></iframe>
 
 <div id="badge" hidden></div>
+<button id="btn-pdf" aria-label="Download PDF">↓ PDF</button>
 <button id="btn-fs" aria-label="Fullscreen">⛶</button>
 <button id="like-fab" hidden aria-label="Like this slide">❤️</button>
 <div id="toast">❤️ sent!</div>
@@ -199,6 +216,11 @@ function toggleFullscreen(){
   }
 }
 btnFs.addEventListener('click', toggleFullscreen);
+
+// PDF: open slides in print mode in a new tab
+document.getElementById('btn-pdf').addEventListener('click', function(){
+  window.open(location.protocol + '//' + HOST + ':' + PORT + '/#print', '_blank');
+});
 document.addEventListener('fullscreenchange', updateFsIcon);
 document.addEventListener('webkitfullscreenchange', updateFsIcon);
 
