@@ -59,11 +59,13 @@ _to_sslip() { echo "${1//./-}.sslip.io"; }
 if [[ -n "$VPS" ]]; then
   MODE="remote"
   VPS_IP=$(echo "$VPS" | cut -d@ -f2)
-  # Auto-HTTPS: compute sslip.io hostname from VPS IP unless caller overrides
+  # Auto-HTTPS: compute sslip.io hostname from VPS IP unless caller overrides.
+  # Uses Caddyfile.prod (real ACME cert — ports 80/443 must be open on the VPS).
   if [[ -z "${SERVER_HOST:-}" ]]; then
     SERVER_HOST=$(_to_sslip "$VPS_IP")
     WS_SCHEME="wss"
   fi
+  export CADDYFILE="./Caddyfile.prod"
   HOST="$SERVER_HOST"
 else
   MODE="local"
@@ -79,16 +81,17 @@ else
       SERVER_HOST="localhost"
     fi
   fi
-  # --https: get public IP → sslip.io (requires port 80/443 forwarded to this machine)
+  # --https (local): uses Caddyfile with tls internal (Caddy local CA).
+  # The LAN IP is kept as SERVER_HOST — no sslip.io needed for internal certs.
+  # One-time trust install:  podman exec $(podman ps -qf name=caddy) caddy trust
   if $HTTPS && [[ "$WS_SCHEME" != "wss" ]]; then
-    _PUB=$(curl -sf --connect-timeout 3 https://api.ipify.org 2>/dev/null || true)
-    if [[ -n "$_PUB" ]]; then
-      SERVER_HOST=$(_to_sslip "$_PUB")
-      WS_SCHEME="wss"
-      echo "ℹ  HTTPS mode → $SERVER_HOST  (needs ports 80/443 forwarded to this machine)"
-    else
-      echo "⚠  Could not detect public IP — falling back to HTTP" >&2
-    fi
+    WS_SCHEME="wss"
+    export CADDYFILE="./Caddyfile"   # tls internal
+    echo "ℹ  HTTPS (local CA) → https://$SERVER_HOST"
+    echo "   First time? Run after Caddy starts:"
+    echo "   podman exec \$(podman ps -qf name=caddy) caddy trust"
+    echo "   Then restart your browser."
+    echo
   fi
   HOST="$SERVER_HOST"
 fi

@@ -1,11 +1,15 @@
-# deck-lovers — Caddy reverse proxy
+# deck-lovers — LOCAL dev Caddyfile (tls internal)
 #
-# SERVER_HOST is injected by deploy.sh / docker-compose.yml:
-#   • bare IP or localhost  → Caddy uses its internal local CA (self-signed)
-#   • public domain / sslip.io → Caddy obtains a real Let's Encrypt certificate
+# Caddy issues a cert from its own local CA — no ACME, works offline,
+# no port-forwarding needed.
 #
-# No manual cert management needed in either case.
+# One-time setup on the presenter's machine (installs Caddy root CA):
+#   podman exec $(podman ps -qf name=caddy) caddy trust
+# Then restart the browser.  Audience devices on the same LAN will still
+# see a cert warning — for them, plain HTTP (./deploy.sh, no --https) is
+# the practical choice, or use a VPS (./deploy.sh with VPS=…).
 
-{$SERVER_HOST} {
+{$SERVER_HOST:localhost} {
+    tls internal
     reverse_proxy server:8000
 }

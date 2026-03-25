@@ -1,0 +1,13 @@
+# deck-lovers — PRODUCTION Caddyfile (ACME / Let's Encrypt)
+#
+# Used automatically by deploy.sh when VPS=… is set.
+# Caddy obtains a real trusted certificate via HTTP-01 challenge.
+# Requires ports 80 + 443 open on the VPS (deploy.sh --setup does this).
+#
+# Works with any public hostname — sslip.io is auto-computed from the
+# VPS IP so no domain purchase is needed:
+#   VPS=root@1.2.3.4 ./deploy.sh   →  SERVER_HOST=1-2-3-4.sslip.io
+
+{$SERVER_HOST} {
+    reverse_proxy server:8000
+}
