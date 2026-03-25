@@ -138,9 +138,10 @@ class TestBuildHtml:
         html = self._html(title="My Presentation")
         assert "My Presentation" in html
 
-    def test_ws_url_injected(self):
+    def test_ws_url_dynamic(self):
+        # WS_URL is now built at runtime in the browser (not baked in at conversion)
         html = self._html()
-        assert "ws://localhost:8000/ws" in html or "WS_URL" not in html
+        assert "location.protocol" in html and "'/ws'" in html
 
     def test_audience_url_injected(self):
         html = self._html()
@@ -196,20 +197,21 @@ class TestBuildHtml:
 # ── WebSocket / QR URL tokens ─────────────────────────────────────────────────
 
 class TestEnvTokens:
-    """WS_URL / AUDIENCE_URL are module-level constants computed at import time.
-    Patch them directly with monkeypatch.setattr."""
+    """AUDIENCE_URL is still baked in (QR code). WS_URL is now dynamic JS.
+    Patch AUDIENCE_URL directly with monkeypatch.setattr."""
 
     def test_custom_host(self, monkeypatch):
-        monkeypatch.setattr(md2html, "WS_URL", "ws://192.168.1.99:8000/ws")
         monkeypatch.setattr(md2html, "AUDIENCE_URL", "http://192.168.1.99:8000/audience")
         html = md2html.build_html(["## S\n\nBody"], doc_title="T")
         assert "192.168.1.99" in html
 
     def test_wss_scheme(self, monkeypatch):
-        monkeypatch.setattr(md2html, "WS_URL", "wss://example.com/ws")
+        # WS scheme is now chosen at runtime; AUDIENCE_URL reflects https for QR code
         monkeypatch.setattr(md2html, "AUDIENCE_URL", "https://example.com/audience")
         html = md2html.build_html(["## S\n\nBody"], doc_title="T")
-        assert "wss://" in html
+        assert "https://example.com/audience" in html
+        # Dynamic WS logic is always present in the output
+        assert "location.protocol" in html
 
 
 # ── main() CLI ────────────────────────────────────────────────────────────────

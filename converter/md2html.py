@@ -331,7 +331,9 @@ li.liked-flash{animation:li-like .45s ease-out forwards;border-radius:6px;}
 _JS_TEMPLATE = """\
 (function(){
 'use strict';
-var WS_URL='__WS_URL__';
+// WS_URL built at runtime so it works behind any proxy (Cloudflare, Caddy, LAN)
+var _wsPort=location.port;
+var WS_URL=(location.protocol==='https:'?'wss':'ws')+'://'+location.hostname+(_wsPort?':'+_wsPort:'')+'/ws';
 var AUDIENCE_URL='__AUDIENCE_URL__';
 var TOTAL=__TOTAL__;
 var MIRROR=location.hash==='#mirror';
@@ -634,7 +636,6 @@ def build_html(slide_texts: list[str], doc_title: str = "Presentation") -> str:
 
     js = (
         _JS_TEMPLATE
-        .replace("__WS_URL__", WS_URL)
         .replace("__AUDIENCE_URL__", AUDIENCE_URL)
         .replace("__TOTAL__", str(total))
     )
