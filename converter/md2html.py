@@ -314,13 +314,15 @@ li.liked-flash{animation:li-like .45s ease-out forwards;border-radius:6px;}
 }
 
 @media print{
+  @page{size:1280px 720px;margin:0;}
   #nav,#qr-overlay,#like-sidebar,#progress,#reconnect{display:none!important;}
   html,body{height:auto;overflow:visible;background:#fff;}
   #deck{position:static;height:auto;}
   .slide{
     position:relative!important;opacity:1!important;transform:none!important;
     pointer-events:auto!important;display:flex!important;
-    height:100vh;page-break-after:always;break-after:page;
+    width:1280px;height:720px;
+    page-break-after:always;break-after:page;
   }
 }
 """
