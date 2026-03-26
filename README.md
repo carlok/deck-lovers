@@ -1,5 +1,9 @@
 # deck-lovers — Interactive AI Presentation System
 
+<p align="center">
+  <img src="deck-lover-logo.png" alt="deck-lovers logo" width="320">
+</p>
+
 Custom HTML slide deck with live audience engagement via WebSocket.
 Audience members open a mobile companion page, follow along, and send likes
 that animate in real time on the projector view.
