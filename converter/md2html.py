@@ -313,19 +313,7 @@ li.liked-flash{animation:li-like .45s ease-out forwards;border-radius:6px;}
   #qr-overlay,#like-sidebar{display:none;}
 }
 
-@media print{
-  @page{size:33.87cm 19.05cm;margin:0;}  /* 16:9 landscape: 1280×720 at 96dpi */
-  #nav,#qr-overlay,#like-sidebar,#progress,#reconnect{display:none!important;}
-  html,body{width:33.87cm;height:auto;overflow:visible;background:#fff;}
-  #deck{position:static;width:33.87cm;height:auto;}
-  .slide{
-    position:relative!important;opacity:1!important;transform:none!important;
-    pointer-events:auto!important;display:flex!important;
-    width:33.87cm;height:19.05cm;
-    page-break-after:always;break-after:page;
-    overflow:hidden;box-sizing:border-box;
-  }
-}
+/* @media print removed — PDF is generated via html2canvas+jsPDF screenshots */
 """
 
 # JS uses __TOKENS__ replaced in Python (avoids escaping all JS { } as {{ }})
@@ -511,19 +499,54 @@ function connect(){
 }
 
 if(PRINT){
-  // Print mode: show all slides stacked, trigger browser print dialog
+  // PDF mode: screenshot every slide with html2canvas, combine via jsPDF
   ['nav','qr-overlay','like-sidebar','progress','reconnect'].forEach(function(id){
-    var el=document.getElementById(id);
-    if(el)el.style.display='none';
+    var el=document.getElementById(id);if(el)el.style.display='none';
   });
-  var deck=document.getElementById('deck');
-  deck.style.cssText='position:static;height:auto;';
+  // Stack all slides at 1280×720 for capture
+  document.getElementById('deck').style.cssText='position:static;height:auto;overflow:visible;';
   slides.forEach(function(s){
-    s.style.cssText='position:relative;opacity:1;transform:none;pointer-events:auto;display:flex;height:100vh;page-break-after:always;break-after:page;';
+    s.style.cssText='position:relative!important;opacity:1!important;transform:none!important;'
+      +'display:flex!important;width:1280px!important;height:720px!important;overflow:hidden;margin-bottom:8px;';
   });
-  // Wait for fonts, images and MathJax/viz.js to settle before printing
+  // Progress overlay
+  var _ov=document.createElement('div');
+  _ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.82);color:#fff;'
+    +'display:flex;flex-direction:column;align-items:center;justify-content:center;'
+    +'z-index:99999;font-family:sans-serif;gap:12px;';
+  _ov.innerHTML='<div style="font-size:1.4rem;font-weight:600">Generating PDF\u2026</div>'
+    +'<div id="_pdf_st" style="font-size:.95rem;opacity:.75">Loading libraries\u2026</div>'
+    +'<div id="_pdf_bar_wrap" style="width:260px;height:6px;background:rgba(255,255,255,.2);border-radius:3px">'
+    +'<div id="_pdf_bar" style="height:6px;background:#4a9eff;border-radius:3px;width:0;transition:width .2s"></div></div>';
+  document.body.appendChild(_ov);
+  function _loadScript(src,cb){var s=document.createElement('script');s.src=src;s.onload=cb;document.head.appendChild(s);}
   window.addEventListener('load',function(){
-    setTimeout(function(){ window.print(); },1200);
+    setTimeout(function(){
+      _loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',function(){
+        _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',function(){
+          var st=document.getElementById('_pdf_st');
+          var bar=document.getElementById('_pdf_bar');
+          var pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'px',format:[1280,720],hotfixes:['px_scaling']});
+          var i=0;
+          function capture(){
+            if(i>=slides.length){
+              if(st)st.textContent='Saving\u2026';
+              pdf.save('slides.pdf');
+              _ov.remove();
+              return;
+            }
+            if(st)st.textContent='Slide '+(i+1)+' / '+slides.length;
+            if(bar)bar.style.width=Math.round((i/slides.length)*100)+'%';
+            html2canvas(slides[i],{scale:1,width:1280,height:720,useCORS:true,logging:false,backgroundColor:null}).then(function(canvas){
+              if(i>0)pdf.addPage([1280,720],'landscape');
+              pdf.addImage(canvas.toDataURL('image/jpeg',0.93),'JPEG',0,0,1280,720);
+              i++;capture();
+            });
+          }
+          capture();
+        });
+      });
+    },1200); // allow MathJax/Graphviz to finish rendering
   });
 } else if(MIRROR){
   // Mirror mode: hide all projector chrome, receive postMessage from parent

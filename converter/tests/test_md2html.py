@@ -157,9 +157,11 @@ class TestBuildHtml:
 
     def test_landscape_print_css(self):
         html = self._html()
-        # Page size now in physical cm units (16:9 landscape)
-        assert "33.87cm" in html
-        assert "19.05cm" in html
+        # PDF generated via html2canvas + jsPDF at 1280×720px (16:9 landscape)
+        assert "html2canvas" in html
+        assert "jsPDF" in html
+        assert "1280" in html
+        assert "720" in html
 
     def test_font_awesome_cdn(self):
         html = self._html()
