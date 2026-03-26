@@ -5,6 +5,7 @@
 #   ./deploy.sh                          # auto-detects runtime + WiFi IP
 #   ./deploy.sh --convert-only           # convert only, no server
 #   ./deploy.sh --serve-only             # skip conversion, start server
+#   ./deploy.sh --cloudflare <url>       # rebake Cloudflare tunnel URL into QR code
 #
 # REMOTE (Hetzner or any SSH host):
 #   VPS=root@1.2.3.4 ./deploy.sh
@@ -18,6 +19,13 @@
 #   COMPOSE      override compose runtime (default: auto-detect)
 #   SERVER_HOST  override hostname baked into QR code (remote: auto-sslip.io)
 #   WS_SCHEME    ws or wss (remote: auto wss; local --https: auto wss)
+#
+# CLOUDFLARE TUNNEL (public HTTPS from laptop, no port forwarding):
+#   Terminal 1:  ./deploy.sh
+#   Terminal 2:  cloudflared tunnel --url http://localhost:8000
+#                → prints https://silver-toast.trycloudflare.com
+#   Terminal 1:  ./deploy.sh --cloudflare https://silver-toast.trycloudflare.com
+#                → reconverts slides with Cloudflare URL in QR code
 
 set -euo pipefail
 
@@ -26,14 +34,30 @@ CONVERT=true
 SERVE=true
 SETUP=false
 HTTPS=false
-for arg in "$@"; do
-  case "$arg" in
-    --convert-only) SERVE=false ;;
-    --serve-only)   CONVERT=false ;;
-    --setup)        SETUP=true ;;
-    --https)        HTTPS=true ;;
+CF_URL=""     # --cloudflare <url>  e.g. https://silver-toast.trycloudflare.com
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --convert-only) SERVE=false;    shift ;;
+    --serve-only)   CONVERT=false;  shift ;;
+    --setup)        SETUP=true;     shift ;;
+    --https)        HTTPS=true;     shift ;;
+    --cloudflare)
+      CF_URL="${2:?'--cloudflare requires a URL argument'}";  shift 2 ;;
+    *) shift ;;
   esac
 done
+
+# --cloudflare: reconvert with public host baked in, don't restart the server
+if [[ -n "$CF_URL" ]]; then
+  # strip scheme and trailing slash:  https://foo.trycloudflare.com/ → foo.trycloudflare.com
+  CF_HOST=$(printf '%s' "$CF_URL" | sed 's|^https\?://||; s|/.*||')
+  SERVER_HOST="$CF_HOST"
+  WS_SCHEME="wss"
+  SERVE=false   # server is already running; only reconvert
+  echo "☁  Cloudflare mode — public host: $CF_HOST"
+  echo
+fi
 
 PORT=${PORT:-8000}
 VPS_SSH_PORT=${VPS_PORT:-22}
