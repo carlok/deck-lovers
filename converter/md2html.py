@@ -25,9 +25,9 @@ SERVER_HOST = os.getenv("SERVER_HOST", "localhost")
 PORT        = os.getenv("PORT", "8000")
 WS_SCHEME   = os.getenv("WS_SCHEME", "ws")   # set to "wss" behind TLS
 
-# Behind a reverse proxy the port is handled by the proxy — omit default ports (M2)
-_default_port = "443" if WS_SCHEME == "wss" else "80"
-_port         = "" if PORT == _default_port else f":{PORT}"
+# Behind a TLS proxy (Caddy/Cloudflare) the public port is always 443 — omit it.
+# For plain HTTP omit only if PORT is the default 80.
+_port = "" if WS_SCHEME == "wss" else ("" if PORT == "80" else f":{PORT}")
 HTTP_SCHEME = "https" if WS_SCHEME == "wss" else "http"
 WS_URL      = f"{WS_SCHEME}://{SERVER_HOST}{_port}/ws"
 AUDIENCE_URL = f"{HTTP_SCHEME}://{SERVER_HOST}{_port}/audience"
