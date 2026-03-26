@@ -18,9 +18,12 @@ var btnFs      = document.getElementById('btn-fs');
 
 var myName      = '';
 var currentIdx  = 0;
+var totalSlides = 0;
 var ws          = null;
 var reconnDelay = 1000;
 var toastTimer  = null;
+
+var btnPdf = document.getElementById('btn-pdf');
 
 // ── Fullscreen toggle ─────────────────────────────────────
 function isFullscreen(){
@@ -81,6 +84,7 @@ frame.addEventListener('load', function(){
 function goToSlide(n){
   currentIdx = n;
   frame.contentWindow.postMessage({type:'go_to_slide', index:n}, location.origin); // C5 target
+  if(btnPdf) btnPdf.hidden = !(totalSlides > 0 && currentIdx === totalSlides - 1);
 }
 
 // ── Burst helpers ─────────────────────────────────────────
@@ -158,6 +162,7 @@ function connect(){
       fab.hidden = false;               // I6: show FAB only once name is confirmed
     }
     else if(msg.type === 'slide_update'){
+      if(msg.total) totalSlides = msg.total;
       goToSlide(msg.index != null ? msg.index : 0);  // I8: 0 is valid, don't coerce
     }
     else if(msg.type === 'projector_status'){
