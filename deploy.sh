@@ -21,11 +21,10 @@
 #   WS_SCHEME    ws or wss (remote: auto wss; local --https: auto wss)
 #
 # CLOUDFLARE TUNNEL (public HTTPS from laptop, no port forwarding):
-#   Terminal 1:  ./deploy.sh
-#   Terminal 2:  cloudflared tunnel --url http://localhost:8000
+#   Terminal 1:  cloudflared tunnel --url http://localhost:8000
 #                → prints https://silver-toast.trycloudflare.com
-#   Terminal 1:  ./deploy.sh --cloudflare https://silver-toast.trycloudflare.com
-#                → reconverts slides with Cloudflare URL in QR code
+#   Terminal 2:  ./deploy.sh --cloudflare https://silver-toast.trycloudflare.com
+#                → converts slides with CF host in QR code + starts server
 
 set -euo pipefail
 
@@ -55,7 +54,7 @@ if [[ -n "$CF_URL" ]]; then
   CF_HOST="${CF_HOST%%/*}"  # strip any trailing path
   SERVER_HOST="$CF_HOST"
   WS_SCHEME="wss"
-  SERVE=false   # server is already running; only reconvert
+  # SERVE stays true — convert + (re)start server so a single command does everything
   echo "☁  Cloudflare mode — public host: $CF_HOST"
   echo
 fi
