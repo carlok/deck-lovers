@@ -74,6 +74,20 @@ class TestAuth:
                         follow_redirects=False)
         assert "proj_auth" in r.cookies
 
+    def test_cookie_not_secure_over_http(self):
+        # WS_SCHEME defaults to "ws" in tests → secure flag must be absent
+        r = client.post("/login", data={"password": PROJECTOR_PASSWORD},
+                        follow_redirects=False)
+        set_cookie = r.headers.get("set-cookie", "")
+        assert "secure" not in set_cookie.lower()
+
+    def test_cookie_secure_over_https(self, monkeypatch):
+        monkeypatch.setenv("WS_SCHEME", "wss")
+        r = client.post("/login", data={"password": PROJECTOR_PASSWORD},
+                        follow_redirects=False)
+        set_cookie = r.headers.get("set-cookie", "")
+        assert "secure" in set_cookie.lower()
+
 
 class TestSlides:
     def test_returns_200(self):

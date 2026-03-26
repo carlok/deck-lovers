@@ -25,6 +25,15 @@ npm-debug.log*
 *.swo
 test-results/
 
+# TLS / certificates
+*.pem
+*.key
+*.crt
+*.csr
+
+# Env overrides (keep .env.example committed, not .env)
+.env
+
 # Caddyfile — Caddyfile and Caddyfile.prod are committed (contain no secrets).
 # Only local personal overrides are ignored:
 Caddyfile.local

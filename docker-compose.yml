@@ -48,6 +48,7 @@ services:
     environment:
       - PROJECTOR_SECRET=${PROJECTOR_SECRET:-}
       - PROJECTOR_PASSWORD=${PROJECTOR_PASSWORD:-admin}
+      - WS_SCHEME=${WS_SCHEME:-ws}
       - WORKSPACE_PATH=/app/workspace
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
@@ -68,7 +69,7 @@ services:
   # (including *.sslip.io) and uses an internal CA for IPs / localhost.
   # Start with: deploy.sh (remote, auto) or deploy.sh --https (local)
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.9.1-alpine
     ports:
       - "80:80"
       - "443:443"

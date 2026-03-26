@@ -4,6 +4,10 @@
   <img src="deck-lover-logo.png" alt="deck-lovers logo" width="320">
 </p>
 
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
+
 Custom HTML slide deck with live audience engagement via WebSocket.
 Audience members open a mobile companion page, follow along, and send likes
 that animate in real time on the projector view.
@@ -335,6 +339,15 @@ PROJECTOR_PASSWORD=mysecretword ./deploy.sh
 ```
 
 The audience page (`/audience`) is never protected — anyone can follow along.
+
+Copy `.env.example` to `.env` at the project root to configure all options:
+
+```bash
+cp .env.example .env
+# edit .env with your values
+```
+
+`.env` is in `.gitignore` — never commit real credentials.
 
 ---
 

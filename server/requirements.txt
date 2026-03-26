@@ -1,4 +1,4 @@
-fastapi
-uvicorn[standard]
-websockets
-python-multipart
+fastapi>=0.115
+uvicorn[standard]>=0.34
+websockets>=14
+python-multipart>=0.0.20

@@ -177,7 +177,9 @@ async def login(password: str = Form(...)):
         err = '<p class="err">Wrong password.</p>'
         return HTMLResponse(_LOGIN_HTML.format(error=err), status_code=401)
     resp = RedirectResponse(url="/", status_code=303)
-    resp.set_cookie("proj_auth", PROJECTOR_PASSWORD, httponly=True, samesite="strict")
+    _https = os.getenv("WS_SCHEME", "ws") == "wss"
+    resp.set_cookie("proj_auth", PROJECTOR_PASSWORD,
+                    httponly=True, samesite="strict", secure=_https)
     return resp
 
 
