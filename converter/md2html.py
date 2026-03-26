@@ -537,7 +537,7 @@ if(PRINT){
             }
             if(st)st.textContent='Slide '+(i+1)+' / '+slides.length;
             if(bar)bar.style.width=Math.round((i/slides.length)*100)+'%';
-            html2canvas(slides[i],{scale:1,width:1280,height:720,useCORS:true,logging:false,backgroundColor:null}).then(function(canvas){
+            html2canvas(slides[i],{scale:1,width:1280,height:720,useCORS:true,logging:false,backgroundColor:'#ffffff'}).then(function(canvas){
               if(i>0)pdf.addPage([1280,720],'landscape');
               pdf.addImage(canvas.toDataURL('image/jpeg',0.93),'JPEG',0,0,1280,720);
               i++;capture();
