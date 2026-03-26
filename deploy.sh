@@ -51,7 +51,8 @@ done
 # --cloudflare: reconvert with public host baked in, don't restart the server
 if [[ -n "$CF_URL" ]]; then
   # strip scheme and trailing slash:  https://foo.trycloudflare.com/ → foo.trycloudflare.com
-  CF_HOST=$(printf '%s' "$CF_URL" | sed 's|^https\?://||; s|/.*||')
+  CF_HOST="${CF_URL#*://}"   # strip scheme (http:// or https://)
+  CF_HOST="${CF_HOST%%/*}"  # strip any trailing path
   SERVER_HOST="$CF_HOST"
   WS_SCHEME="wss"
   SERVE=false   # server is already running; only reconvert
