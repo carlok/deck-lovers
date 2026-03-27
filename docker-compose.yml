@@ -32,6 +32,7 @@ services:
       - SERVER_HOST=${SERVER_HOST:-localhost}
       - PORT=${PORT:-8000}
       - WS_SCHEME=${WS_SCHEME:-ws}
+      - LINE_REVEAL=${LINE_REVEAL:-off}
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     profiles: ["convert"]

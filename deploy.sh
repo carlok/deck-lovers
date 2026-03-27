@@ -5,6 +5,8 @@
 #   ./deploy.sh                          # auto-detects runtime + WiFi IP
 #   ./deploy.sh --convert-only           # convert only, no server
 #   ./deploy.sh --serve-only             # skip conversion, start server
+#   ./deploy.sh --slides-file tmp/presentation_from_tex.md
+#   ./deploy.sh --line-reveal            # arrows reveal lines before changing slide
 #   ./deploy.sh --cloudflare <url>       # rebake Cloudflare tunnel URL into QR code
 #
 # REMOTE (Hetzner or any SSH host):
@@ -34,6 +36,8 @@ SERVE=true
 SETUP=false
 HTTPS=false
 CF_URL=""     # --cloudflare <url>  e.g. https://silver-toast.trycloudflare.com
+SLIDES_FILE="" # --slides-file <path>  e.g. tmp/presentation_from_tex.md
+LINE_REVEAL="off" # --line-reveal
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -41,6 +45,10 @@ while [[ $# -gt 0 ]]; do
     --serve-only)   CONVERT=false;  shift ;;
     --setup)        SETUP=true;     shift ;;
     --https)        HTTPS=true;     shift ;;
+    --slides-file)
+      SLIDES_FILE="${2:?'--slides-file requires a path argument'}"; shift 2 ;;
+    --line-reveal)
+      LINE_REVEAL="on"; shift ;;
     --cloudflare)
       CF_URL="${2:?'--cloudflare requires a URL argument'}";  shift 2 ;;
     *) shift ;;
@@ -129,6 +137,8 @@ printf "│  mode    : %-30s│\n" "$MODE"
 printf "│  runtime : %-30s│\n" "$COMPOSE"
 printf "│  host    : %-30s│\n" "$HOST"
 printf "│  port    : %-30s│\n" "$PORT"
+[[ -n "$SLIDES_FILE" ]] && printf "│  slides  : %-30s│\n" "$SLIDES_FILE"
+printf "│  reveals : %-30s│\n" "$LINE_REVEAL"
 [[ "$MODE" == "remote" ]] && printf "│  vps     : %-30s│\n" "$VPS"
 echo "└─────────────────────────────────────────┘"
 echo
@@ -151,7 +161,19 @@ _convert() {
   mkdir -p output
   chmod 777 output
 
-  if [[ -s source/slides.tex ]]; then
+  if [[ -n "$SLIDES_FILE" ]]; then
+    echo "→ 1/2  source  using --slides-file: $SLIDES_FILE"
+    if [[ ! -f "$SLIDES_FILE" ]]; then
+      echo "ERROR: slides source file not found: $SLIDES_FILE" >&2
+      exit 1
+    fi
+    if [[ ! -r "$SLIDES_FILE" ]]; then
+      echo "ERROR: slides source file is not readable: $SLIDES_FILE" >&2
+      exit 1
+    fi
+    cp "$SLIDES_FILE" output/slides.md
+    echo "  → copied $SLIDES_FILE → output/slides.md"
+  elif [[ -s source/slides.tex ]]; then
     echo "▶ 1/2  tex2md   slides.tex → output/slides.md"
     $COMPOSE run --rm --remove-orphans tex2md
     echo "  ✓ done"
@@ -172,7 +194,8 @@ _convert() {
   # Remove any stale file — previous runs may have left it with a different owner
   # (e.g. appuser/UID-1000 from an old image) that the current container can't overwrite.
   rm -f output/slides.html
-  SERVER_HOST="$host" PORT="$PORT" WS_SCHEME="$WS_SCHEME" $COMPOSE run --rm --remove-orphans md2html
+  SERVER_HOST="$host" PORT="$PORT" WS_SCHEME="$WS_SCHEME" LINE_REVEAL="$LINE_REVEAL" \
+    $COMPOSE run --rm --remove-orphans md2html
   echo "  ✓ output/slides.html ready"
   echo
 }

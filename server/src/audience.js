@@ -81,9 +81,12 @@ frame.addEventListener('load', function(){
 });
 
 // ── Drive iframe slide ────────────────────────────────────
-function goToSlide(n){
+function goToSlide(n, reveal){
   currentIdx = n;
-  frame.contentWindow.postMessage({type:'go_to_slide', index:n}, location.origin); // C5 target
+  frame.contentWindow.postMessage(
+    {type:'go_to_state', index:n, reveal:(typeof reveal === 'number' ? reveal : 0)},
+    location.origin
+  ); // C5 target
   if(btnPdf) btnPdf.hidden = !(totalSlides > 0 && currentIdx === totalSlides - 1);
 }
 
@@ -163,7 +166,7 @@ function connect(){
     }
     else if(msg.type === 'slide_update'){
       if(msg.total) totalSlides = msg.total;
-      goToSlide(msg.index != null ? msg.index : 0);  // I8: 0 is valid, don't coerce
+      goToSlide(msg.index != null ? msg.index : 0, msg.reveal);  // I8: 0 is valid, don't coerce
     }
     else if(msg.type === 'projector_status'){
       projWarn.classList.toggle('show', !msg.connected);

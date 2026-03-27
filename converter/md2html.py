@@ -31,6 +31,7 @@ _port = "" if WS_SCHEME == "wss" else ("" if PORT == "80" else f":{PORT}")
 HTTP_SCHEME = "https" if WS_SCHEME == "wss" else "http"
 WS_URL      = f"{WS_SCHEME}://{SERVER_HOST}{_port}/ws"
 AUDIENCE_URL = f"{HTTP_SCHEME}://{SERVER_HOST}{_port}/audience"
+LINE_REVEAL_ENV = os.getenv("LINE_REVEAL", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 # ── YouTube ───────────────────────────────────────────────────────────────────
 
@@ -169,6 +170,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:var(--san
 .slide li{font-size:clamp(1.05rem,2vw,1.5rem);line-height:1.6;margin-bottom:.28em;}
 .slide ul li::marker{color:var(--accent);font-size:1.1em;}
 .slide ol li::marker{color:var(--accent);font-weight:700;}
+.line-hidden{visibility:hidden!important;opacity:0!important;pointer-events:none!important;}
 
 /* Task list */
 li.task-item{list-style:none;margin-left:-1.6em;padding-left:.3em;}
@@ -325,6 +327,7 @@ var _wsPort=location.port;
 var WS_URL=(location.protocol==='https:'?'wss':'ws')+'://'+location.hostname+(_wsPort?':'+_wsPort:'')+'/ws';
 var AUDIENCE_URL='__AUDIENCE_URL__';
 var TOTAL=__TOTAL__;
+var LINE_REVEAL=__LINE_REVEAL__;
 var MIRROR=location.hash==='#mirror';
 var PRINT=location.hash==='#print';
 var current=0;
@@ -338,9 +341,37 @@ var counter=document.getElementById('counter');
 var progress=document.getElementById('progress');
 var btnPrev=document.getElementById('btn-prev');
 var btnNext=document.getElementById('btn-next');
+var revealablesBySlide=slides.map(function(slide){
+  return Array.from(slide.querySelectorAll('p,li,blockquote,pre,table,.yt-wrap,.dot-diagram,h3,h4,h5,h6'));
+});
+var revealState=slides.map(function(){return 0;});
+
+function applyReveal(slideIdx){
+  if(!LINE_REVEAL)return;
+  var revealables=revealablesBySlide[slideIdx]||[];
+  var shown=Math.max(0,Math.min(revealState[slideIdx]||0,revealables.length));
+  revealables.forEach(function(node,i){
+    node.classList.toggle('line-hidden',i>=shown);
+  });
+}
+
+function setReveal(slideIdx,value){
+  if(!LINE_REVEAL)return;
+  var revealables=revealablesBySlide[slideIdx]||[];
+  revealState[slideIdx]=Math.max(0,Math.min(value,revealables.length));
+  applyReveal(slideIdx);
+}
+
+function syncPresentationState(){
+  if(MIRROR||!ws||ws.readyState!==WebSocket.OPEN)return;
+  ws.send(JSON.stringify({
+    type:'presentation_state',
+    index:current,
+    reveal:revealState[current]||0
+  }));
+}
 
 function showSlide(n){
-  var prev=current;
   current=Math.max(0,Math.min(n,TOTAL-1));
   slides.forEach(function(s,i){
     s.classList.remove('active','prev');
@@ -351,19 +382,48 @@ function showSlide(n){
   progress.style.width=(TOTAL>1?(current/(TOTAL-1)*100):100)+'%';
   btnPrev.disabled=current===0;
   btnNext.disabled=current===TOTAL-1;
+  if(LINE_REVEAL)applyReveal(current);
   updateSidebar(current);
-  if(!MIRROR&&ws&&ws.readyState===WebSocket.OPEN){
-    ws.send(JSON.stringify({type:'slide_change',index:current}));
-  }
+  syncPresentationState();
   if(slides[current]&&slides[current].id==='stats-slide') renderStats();
 }
 
-btnPrev.addEventListener('click',function(){showSlide(current-1);});
-btnNext.addEventListener('click',function(){showSlide(current+1);});
+function nextStep(){
+  if(LINE_REVEAL){
+    var revealables=revealablesBySlide[current]||[];
+    if(revealState[current]<revealables.length){
+      setReveal(current,revealState[current]+1);
+      syncPresentationState();
+      return;
+    }
+  }
+  showSlide(current+1);
+}
+
+function prevStep(){
+  if(LINE_REVEAL){
+    if(revealState[current]>0){
+      setReveal(current,revealState[current]-1);
+      syncPresentationState();
+      return;
+    }
+    if(current>0){
+      showSlide(current-1);
+      var revealables=revealablesBySlide[current]||[];
+      setReveal(current,revealables.length);
+      syncPresentationState();
+      return;
+    }
+  }
+  showSlide(current-1);
+}
+
+btnPrev.addEventListener('click',prevStep);
+btnNext.addEventListener('click',nextStep);
 
 document.addEventListener('keydown',function(e){
-  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();showSlide(current+1);}
-  else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();showSlide(current-1);}
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();nextStep();}
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();prevStep();}
 });
 
 var touchX=0;
@@ -371,7 +431,7 @@ if(!MIRROR){
   document.addEventListener('touchstart',function(e){touchX=e.changedTouches[0].clientX;},{passive:true});
   document.addEventListener('touchend',function(e){
     var dx=e.changedTouches[0].clientX-touchX;
-    if(Math.abs(dx)>50){dx<0?showSlide(current+1):showSlide(current-1);}
+    if(Math.abs(dx)>50){dx<0?nextStep():prevStep();}
   },{passive:true});
 }
 
@@ -485,10 +545,15 @@ function connect(){
       };
     });
     ws.send(JSON.stringify({type:'slides_meta',slides:meta}));
+    syncPresentationState();
   };
   ws.onmessage=function(e){
     var msg;try{msg=JSON.parse(e.data);}catch(x){return;}
     if(msg.type==='like_update')onLikeUpdate(msg);
+    if(msg.type==='presentation_state'&&MIRROR){
+      if(typeof msg.index==='number')showSlide(msg.index);
+      if(typeof msg.reveal==='number')setReveal(current,msg.reveal);
+    }
   };
   ws.onclose=function(){
     if(reconnectEl)reconnectEl.hidden=false;
@@ -556,10 +621,16 @@ if(PRINT){
   });
   window.addEventListener('message',function(e){
     if(e.origin!==location.origin) return;  // I4: reject cross-origin messages
+    if(e.data&&e.data.type==='go_to_state'){
+      showSlide(e.data.index);
+      if(typeof e.data.reveal==='number')setReveal(current,e.data.reveal);
+      return;
+    }
     if(e.data&&e.data.type==='go_to_slide') showSlide(e.data.index);
   });
   showSlide(0);
 } else {
+  if(LINE_REVEAL)applyReveal(0);
   showSlide(0);
   connect();
 }
@@ -612,7 +683,7 @@ document.querySelectorAll('pre code:not(.language-dot)').forEach(function(el){
 })();
 </script>"""
 
-def build_html(slide_texts: list[str], doc_title: str = "Presentation") -> str:
+def build_html(slide_texts: list[str], doc_title: str = "Presentation", line_reveal: bool = False) -> str:
     total = len(slide_texts) + 1  # +1 for stats slide appended below
 
     slides_html_parts = []
@@ -639,6 +710,7 @@ def build_html(slide_texts: list[str], doc_title: str = "Presentation") -> str:
         _JS_TEMPLATE
         .replace("__AUDIENCE_URL__", AUDIENCE_URL)
         .replace("__TOTAL__", str(total))
+        .replace("__LINE_REVEAL__", "true" if line_reveal else "false")
     )
 
     escaped_title = _esc.escape(doc_title)
@@ -704,6 +776,12 @@ def main() -> None:
     p.add_argument("--input",  required=True, help="Path to slides.md")
     p.add_argument("--output", required=True, help="Path to output slides.html")
     p.add_argument("--title",  default="Presentation", help="Document <title>")
+    p.add_argument(
+        "--line-reveal",
+        choices=["on", "off"],
+        default="on" if LINE_REVEAL_ENV else "off",
+        help="Arrow keys reveal/hide lines before changing slide (default from LINE_REVEAL env).",
+    )
     args = p.parse_args()
 
     try:
@@ -722,7 +800,11 @@ def main() -> None:
     print(f"[md2html] SERVER_HOST={SERVER_HOST}  WS={WS_URL}")
     print(f"[md2html] Audience: {AUDIENCE_URL}")
 
-    html = build_html(slide_texts, doc_title=args.title)
+    html = build_html(
+        slide_texts,
+        doc_title=args.title,
+        line_reveal=(args.line_reveal == "on"),
+    )
 
     with open(args.output, "w", encoding="utf-8") as f:  # M1: context manager
         f.write(html)

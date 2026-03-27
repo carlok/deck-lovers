@@ -24,6 +24,7 @@ LIKES_CAP = 1000  # Max recorded likes per slide (C3 fix)
 
 # ── Server state ──────────────────────────────────────────────────────────────
 current_slide: int = 0
+current_reveal: int = 0
 slides_total: int = 0
 clients: dict[WebSocket, str] = {}          # ws → username
 projector_ws: Optional[WebSocket] = None
@@ -225,7 +226,7 @@ async def health():
 # ── WebSocket ─────────────────────────────────────────────────────────────────
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
-    global current_slide, slides_total, projector_ws, slides_meta
+    global current_slide, current_reveal, slides_total, projector_ws, slides_meta
 
     await ws.accept()
     is_projector = False
@@ -238,6 +239,7 @@ async def websocket_endpoint(ws: WebSocket):
     await ws.send_text(json.dumps({
         "type": "slide_update",
         "index": current_slide,
+        "reveal": current_reveal,
         "total": slides_total,
         "title": m["title"],
         "summary": m["summary"],
@@ -283,10 +285,26 @@ async def websocket_endpoint(ws: WebSocket):
             elif mtype == "slide_change" and is_projector:
                 idx = int(msg.get("index", 0))                     # I2: bounds-check
                 current_slide = max(0, min(idx, max(slides_total - 1, 0)))
+                current_reveal = max(0, int(msg.get("reveal", 0)))
                 m = _meta(current_slide)
                 await _broadcast_audience({
                     "type": "slide_update",
                     "index": current_slide,
+                    "reveal": current_reveal,
+                    "total": slides_total,
+                    "title": m["title"],
+                    "summary": m["summary"],
+                })
+
+            elif mtype == "presentation_state" and is_projector:
+                idx = int(msg.get("index", current_slide))
+                current_slide = max(0, min(idx, max(slides_total - 1, 0)))
+                current_reveal = max(0, int(msg.get("reveal", 0)))
+                m = _meta(current_slide)
+                await _broadcast_audience({
+                    "type": "slide_update",
+                    "index": current_slide,
+                    "reveal": current_reveal,
                     "total": slides_total,
                     "title": m["title"],
                     "summary": m["summary"],
@@ -311,6 +329,7 @@ async def websocket_endpoint(ws: WebSocket):
                 await ws.send_text(json.dumps({
                     "type": "slide_update",
                     "index": current_slide,
+                    "reveal": current_reveal,
                     "total": slides_total,
                     "title": m["title"],
                     "summary": m["summary"],

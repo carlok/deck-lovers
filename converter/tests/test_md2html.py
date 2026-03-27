@@ -155,6 +155,10 @@ class TestBuildHtml:
         html = self._html()
         assert "#print" in html
 
+    def test_line_reveal_token_injected(self):
+        html = md2html.build_html(self.SLIDES, doc_title="Deck", line_reveal=True)
+        assert "var LINE_REVEAL=true;" in html
+
     def test_landscape_print_css(self):
         html = self._html()
         # PDF generated via html2canvas + jsPDF at 1280×720px (16:9 landscape)
@@ -241,6 +245,28 @@ class TestMain:
         content = out_file.read_text(encoding="utf-8")
         assert "<!DOCTYPE html>" in content
         assert "Slide" in content
+
+    def test_cli_line_reveal_on(self, tmp_path, monkeypatch):
+        import sys
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## Slide\n\nBody", encoding="utf-8")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "md2html.py",
+                "--input",
+                str(md_file),
+                "--output",
+                str(out_file),
+                "--line-reveal",
+                "on",
+            ],
+        )
+        md2html.main()
+        content = out_file.read_text(encoding="utf-8")
+        assert "var LINE_REVEAL=true;" in content
 
     def test_missing_input_exits(self, tmp_path, monkeypatch):
         import sys

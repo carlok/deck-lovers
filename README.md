@@ -194,6 +194,12 @@ Caddy obtains the cert and audience URL becomes `https://1-2-3-4.sslip.io/audien
 # Server only (skip conversion)
 ./deploy.sh --serve-only
 
+# Use a custom markdown source file
+./deploy.sh --slides-file tmp/presentation_from_tex.md
+
+# Reveal slide content line-by-line (speaker arrows)
+./deploy.sh --line-reveal
+
 # Override runtime or hostname
 COMPOSE="podman compose" SERVER_HOST=192.168.0.106 ./deploy.sh
 

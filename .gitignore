@@ -1,5 +1,6 @@
 # Generated output
 output/
+tmp/
 
 # Python
 __pycache__/
