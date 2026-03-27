@@ -3,7 +3,8 @@ WORKDIR /app
 
 # Install Jest from package.json
 COPY package.json ./
-RUN npm install --no-progress --quiet
+COPY package-lock.json ./
+RUN npm ci --no-progress --quiet
 
 # Copy source and tests
 COPY src/   ./src/

@@ -11,13 +11,22 @@
 #   ./run_tests.sh js           # both Jest suites
 set -euo pipefail
 
-COMPOSE=$(command -v podman-compose 2>/dev/null || command -v docker-compose 2>/dev/null || echo "docker compose")
+COMPOSE="podman compose"
+if ! command -v podman >/dev/null 2>&1 || ! podman info >/dev/null 2>&1; then
+  echo "ERROR: Podman is required. Install Podman and retry." >&2
+  exit 1
+fi
+if ! podman compose version >/dev/null 2>&1; then
+  echo "ERROR: 'podman compose' is required. Install podman-compose plugin and retry." >&2
+  exit 1
+fi
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 SUITE="${1:-all}"
 
 mkdir -p test-results
+chmod -R 777 test-results || true
 
 run_suite() {
   local svc="$1"

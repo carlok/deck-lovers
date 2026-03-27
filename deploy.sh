@@ -64,16 +64,17 @@ VPS_SSH_PORT=${VPS_PORT:-22}
 VPS=${VPS:-}
 WS_SCHEME=${WS_SCHEME:-ws}
 
-# ── Detect compose runtime ────────────────────────────────────────────────────
+# ── Detect compose runtime (Podman only) ─────────────────────────────────────
 if [[ -z "${COMPOSE:-}" ]]; then
-  if command -v podman &>/dev/null && podman info &>/dev/null 2>&1; then
-    COMPOSE="podman compose"
-  elif command -v docker &>/dev/null && docker compose version &>/dev/null 2>&1; then
-    COMPOSE="docker compose"
-  else
-    echo "ERROR: neither 'podman compose' nor 'docker compose' found." >&2
-    exit 1
-  fi
+  COMPOSE="podman compose"
+fi
+if ! command -v podman &>/dev/null || ! podman info &>/dev/null 2>&1; then
+  echo "ERROR: Podman is required." >&2
+  exit 1
+fi
+if ! podman compose version &>/dev/null 2>&1; then
+  echo "ERROR: 'podman compose' is required." >&2
+  exit 1
 fi
 
 # ── sslip.io helper: 1.2.3.4 → 1-2-3-4.sslip.io ─────────────────────────────

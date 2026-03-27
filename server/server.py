@@ -19,7 +19,7 @@ SLIDES_HTML = WORKSPACE / "slides.html"
 AUDIENCE_HTML = Path(__file__).parent / "audience.html"
 AUDIENCE_SRC  = Path(__file__).parent / "src"
 PROJECTOR_SECRET   = os.getenv("PROJECTOR_SECRET", "")    # Optional WS projector auth
-PROJECTOR_PASSWORD = os.getenv("PROJECTOR_PASSWORD", "admin")  # Page password ("" = off)
+PROJECTOR_PASSWORD = os.getenv("PROJECTOR_PASSWORD", "changeme")  # Page password ("" = off)
 LIKES_CAP = 1000  # Max recorded likes per slide (C3 fix)
 
 # ── Server state ──────────────────────────────────────────────────────────────

@@ -1,10 +1,12 @@
 # deck-lovers — Interactive AI Presentation System
 
 <p align="center">
-  <img src="deck-lover-logo.png" alt="deck-lovers logo" width="320">
+  <img src="deck-lovers-logo.png" alt="deck-lovers logo" width="320">
 </p>
 
 <p align="center">
+  <a href="https://github.com/carlok/deck-lovers/actions/workflows/ci.yml"><img src="https://github.com/carlok/deck-lovers/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/carlok/deck-lovers/releases"><img src="https://img.shields.io/github/v/release/carlok/deck-lovers?display_name=tag" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
@@ -13,6 +15,27 @@ Audience members open a mobile companion page, follow along, and send likes
 that animate in real time on the projector view.
 
 No Reveal.js. No frameworks. Pure HTML/CSS/JS generated from Markdown.
+
+---
+
+## Quickstart (60 seconds)
+
+```bash
+cp .env.example .env
+# set a real projector password in .env
+./deploy.sh
+```
+
+Then open:
+- Projector: `http://<LAN-IP>:8000`
+- Audience: `http://<LAN-IP>:8000/audience`
+
+Host remains clean:
+- no host `npm install`
+- no host Python `venv`
+- all conversion, serving, and tests run in Podman containers
+
+For internals and component map, see `ARCHITECTURE.md`.
 
 ---
 
@@ -120,7 +143,7 @@ Best for trusted LAN / in-person use. No certs, no port-forwarding.
 ./deploy.sh
 ```
 
-1. Detects `podman compose` or `docker compose`
+1. Uses `podman compose`
 2. Detects your WiFi IP (macOS `en0`/`en1`, Linux `ip addr`) — bakes it into the QR code
 3. Converts `slides.md` → `output/slides.html`
 4. Starts the server at `http://<LAN-IP>:8000`
@@ -181,8 +204,8 @@ VPS_PORT=2222 VPS=root@YOUR_SERVER_IP ./deploy.sh
 ### Rebuild images after code changes
 
 ```bash
-docker compose build md2html
-docker compose build server
+podman compose build md2html
+podman compose build server
 ```
 
 ---
@@ -322,7 +345,7 @@ navigation by audience members.
 
 | Env var | Default | Effect |
 |---|---|---|
-| `PROJECTOR_PASSWORD` | `admin` | Password shown on login form |
+| `PROJECTOR_PASSWORD` | `changeme` | Password shown on login form (change before public use) |
 | `PROJECTOR_PASSWORD=""` | *(unset)* | Disables protection entirely |
 
 Set it in a `.env` file at the project root (already in `.gitignore`):
@@ -331,6 +354,8 @@ Set it in a `.env` file at the project root (already in `.gitignore`):
 # .env
 PROJECTOR_PASSWORD=mysecretword
 ```
+
+Never keep `PROJECTOR_PASSWORD=changeme` in production/public deployments.
 
 Docker Compose picks it up automatically. Or pass it inline:
 
