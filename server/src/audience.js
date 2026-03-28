@@ -97,10 +97,9 @@ var BURST_MS    = 80;  // ms between each heart/like
 var _tapX = window.innerWidth / 2;   // last tap X (default: center)
 var _tapY = window.innerHeight / 2;  // last tap Y
 
-tapOverlay.addEventListener('click', function(e){
-  _tapX = e.clientX;
-  _tapY = e.clientY;
-}, true);  // capture phase so coords are set before triggerBurst
+function canSendLove(){
+  return ws && ws.readyState === WebSocket.OPEN && myName;
+}
 
 function spawnHeart(){
   var el = document.createElement('span');
@@ -137,10 +136,66 @@ function triggerBurst(){
 }
 
 // ── Tap anywhere on slide area to send love ───────────────
-tapOverlay.addEventListener('click', function(){
-  if(!ws || ws.readyState !== WebSocket.OPEN || !myName) return;
+// Mobile Safari often omits click on plain divs; Pointer Events + touchend cover touch.
+function onOverlayLovePointer(e){
+  if(!canSendLove()) return;
+  if(typeof e.button === 'number' && e.button !== 0) return;
+  _tapX = e.clientX;
+  _tapY = e.clientY;
   triggerBurst();
-});
+}
+function onOverlayLoveTouchEnd(e){
+  if(!canSendLove()) return;
+  if(e.changedTouches.length !== 1) return;
+  var t = e.changedTouches[0];
+  _tapX = t.clientX;
+  _tapY = t.clientY;
+  triggerBurst();
+  e.preventDefault();
+}
+if(window.PointerEvent){
+  tapOverlay.addEventListener('pointerup', onOverlayLovePointer);
+} else {
+  tapOverlay.addEventListener('click', function(e){
+    if(!canSendLove()) return;
+    _tapX = e.clientX;
+    _tapY = e.clientY;
+    triggerBurst();
+  });
+  tapOverlay.addEventListener('touchend', onOverlayLoveTouchEnd, {passive:false});
+}
+
+// FAB sits above the overlay — it must have its own handler or taps on ❤️ do nothing.
+function fabCenterCoords(){
+  var r = fab.getBoundingClientRect();
+  _tapX = r.left + r.width / 2;
+  _tapY = r.top + r.height / 2;
+}
+function onFabLovePointer(e){
+  if(!canSendLove()) return;
+  if(typeof e.button === 'number' && e.button !== 0) return;
+  e.stopPropagation();
+  fabCenterCoords();
+  triggerBurst();
+}
+function onFabLoveTouchEnd(e){
+  if(!canSendLove()) return;
+  e.stopPropagation();
+  fabCenterCoords();
+  triggerBurst();
+  e.preventDefault();
+}
+if(window.PointerEvent){
+  fab.addEventListener('pointerup', onFabLovePointer);
+} else {
+  fab.addEventListener('click', function(e){
+    if(!canSendLove()) return;
+    e.stopPropagation();
+    fabCenterCoords();
+    triggerBurst();
+  });
+  fab.addEventListener('touchend', onFabLoveTouchEnd, {passive:false});
+}
 
 // ── WebSocket (audience role) ─────────────────────────────
 function connect(){
