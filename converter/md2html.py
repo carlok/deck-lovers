@@ -486,6 +486,7 @@ function renderStats(){
     rows.push({title:h?h.textContent.trim():'Slide '+(i+1),idx:i,count:likesData[i]||0});
   });
   rows.sort(function(a,b){return b.count-a.count;});
+  rows=rows.slice(0,10);
   var maxC=rows[0]&&rows[0].count>0?rows[0].count:1;
   chart.innerHTML='';
   rows.forEach(function(r){
@@ -700,7 +701,7 @@ def build_html(slide_texts: list[str], doc_title: str = "Presentation", line_rev
         f'  <div class="slide content" id="stats-slide" data-index="{stats_idx}">\n'
         f'  <h2>Audience Engagement</h2>\n'
         f'  <div id="stats-chart" class="stats-grid"></div>\n'
-        f'  <p style="margin-top:1.2em;font-size:.8em;color:var(--muted)">ranked by likes · updates live</p>\n'
+        f'  <p style="margin-top:1.2em;font-size:.8em;color:var(--muted)">top 10 slides · ranked by likes · updates live</p>\n'
         f'  </div>'
     )
 

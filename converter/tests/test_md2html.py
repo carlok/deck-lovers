@@ -174,6 +174,8 @@ class TestBuildHtml:
     def test_stats_slide_appended(self):
         html = self._html()
         assert "stats" in html.lower() or "likes" in html.lower()
+        assert "top 10" in html.lower()
+        assert "slice(0,10)" in html
 
     def test_checklist_unchecked_postprocessed(self):
         # build_html applies postprocess; ☐ or task-open class expected
