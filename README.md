@@ -197,8 +197,17 @@ Caddy obtains the cert and audience URL becomes `https://1-2-3-4.sslip.io/audien
 # Use a custom markdown source file
 ./deploy.sh --slides-file tmp/presentation_from_tex.md
 
+# Common offline workflow (custom file + convert only + no QR)
+./deploy.sh --convert-only --slides-file tmp/cottonia_slides.md --no-qr
+
 # Reveal slide content line-by-line (speaker arrows)
 ./deploy.sh --line-reveal
+
+# Hide audience QR overlay in projector HTML (offline / no-phone mode)
+./deploy.sh --no-qr
+
+# General form (same result)
+./deploy.sh --qr off
 
 # Override runtime or hostname
 COMPOSE="podman compose" SERVER_HOST=192.168.0.106 ./deploy.sh
@@ -392,7 +401,8 @@ pip install -r server/requirements.txt
 mkdir -p output && cp slides.md output/slides.md
 SERVER_HOST=localhost python converter/md2html.py \
   --input output/slides.md \
-  --output output/slides.html
+  --output output/slides.html \
+  --qr off   # optional: hide QR overlay
 
 # Serve
 WORKSPACE_PATH=./output uvicorn server.server:app --host 0.0.0.0 --port 8000

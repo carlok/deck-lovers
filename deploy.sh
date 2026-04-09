@@ -7,6 +7,8 @@
 #   ./deploy.sh --serve-only             # skip conversion, start server
 #   ./deploy.sh --slides-file tmp/presentation_from_tex.md
 #   ./deploy.sh --line-reveal            # arrows reveal lines before changing slide
+#   ./deploy.sh --no-qr                  # hide audience QR overlay in projector HTML
+#   ./deploy.sh --qr off                 # same as --no-qr (general form)
 #   ./deploy.sh --cloudflare <url>       # rebake Cloudflare tunnel URL into QR code
 #
 # REMOTE (Hetzner or any SSH host):
@@ -38,6 +40,7 @@ HTTPS=false
 CF_URL=""     # --cloudflare <url>  e.g. https://silver-toast.trycloudflare.com
 SLIDES_FILE="" # --slides-file <path>  e.g. tmp/presentation_from_tex.md
 LINE_REVEAL="off" # --line-reveal
+SHOW_QR="on" # --qr on|off or --no-qr
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -49,11 +52,20 @@ while [[ $# -gt 0 ]]; do
       SLIDES_FILE="${2:?'--slides-file requires a path argument'}"; shift 2 ;;
     --line-reveal)
       LINE_REVEAL="on"; shift ;;
+    --no-qr)
+      SHOW_QR="off"; shift ;;
+    --qr)
+      SHOW_QR="${2:?'--qr requires on|off'}"; shift 2 ;;
     --cloudflare)
       CF_URL="${2:?'--cloudflare requires a URL argument'}";  shift 2 ;;
     *) shift ;;
   esac
 done
+
+if [[ "$SHOW_QR" != "on" && "$SHOW_QR" != "off" ]]; then
+  echo "ERROR: --qr accepts only 'on' or 'off'" >&2
+  exit 1
+fi
 
 # --cloudflare: reconvert with public host baked in, don't restart the server
 if [[ -n "$CF_URL" ]]; then
@@ -139,6 +151,7 @@ printf "│  host    : %-30s│\n" "$HOST"
 printf "│  port    : %-30s│\n" "$PORT"
 [[ -n "$SLIDES_FILE" ]] && printf "│  slides  : %-30s│\n" "$SLIDES_FILE"
 printf "│  reveals : %-30s│\n" "$LINE_REVEAL"
+printf "│  qr      : %-30s│\n" "$SHOW_QR"
 [[ "$MODE" == "remote" ]] && printf "│  vps     : %-30s│\n" "$VPS"
 echo "└─────────────────────────────────────────┘"
 echo
@@ -194,7 +207,7 @@ _convert() {
   # Remove any stale file — previous runs may have left it with a different owner
   # (e.g. appuser/UID-1000 from an old image) that the current container can't overwrite.
   rm -f output/slides.html
-  SERVER_HOST="$host" PORT="$PORT" WS_SCHEME="$WS_SCHEME" LINE_REVEAL="$LINE_REVEAL" \
+  SERVER_HOST="$host" PORT="$PORT" WS_SCHEME="$WS_SCHEME" LINE_REVEAL="$LINE_REVEAL" SHOW_QR="$SHOW_QR" \
     $COMPOSE run --rm --remove-orphans md2html
   echo "  ✓ output/slides.html ready"
   echo

@@ -32,6 +32,7 @@ HTTP_SCHEME = "https" if WS_SCHEME == "wss" else "http"
 WS_URL      = f"{WS_SCHEME}://{SERVER_HOST}{_port}/ws"
 AUDIENCE_URL = f"{HTTP_SCHEME}://{SERVER_HOST}{_port}/audience"
 LINE_REVEAL_ENV = os.getenv("LINE_REVEAL", "0").strip().lower() in {"1", "true", "yes", "on"}
+SHOW_QR_ENV = os.getenv("SHOW_QR", "1").strip().lower() in {"1", "true", "yes", "on"}
 
 # ── YouTube ───────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,33 @@ def _preprocess(text: str) -> str:
         text,
         flags=re.MULTILINE,
     )
+    text = _normalize_two_space_nested_lists(text)
     return text
+
+def _normalize_two_space_nested_lists(text: str) -> str:
+    """Treat `  - child` as nested when following a list item.
+
+    Authors often write nested bullets with two spaces. Python-Markdown expects
+    four spaces, otherwise items can flatten into a single-level list.
+    """
+    lines = text.splitlines()
+    out: list[str] = []
+    prev_list_indent = None
+    list_item_re = re.compile(r'^(\s*)([-*+])\s+')
+    for line in lines:
+        m = list_item_re.match(line)
+        if m:
+            indent = len(m.group(1))
+            # Handle common markdown style where nested bullets are indented
+            # with 2 spaces instead of 4. Keep converting consecutive children.
+            if indent == 2 and prev_list_indent in {0, 4}:
+                line = "  " + line  # 2 -> 4 spaces for nested bullet
+                indent = 4
+            prev_list_indent = indent
+        elif line.strip():
+            prev_list_indent = None
+        out.append(line)
+    return "\n".join(out)
 
 def _postprocess(html: str) -> str:
     """Style task-list items after markdown parse."""
@@ -328,6 +355,7 @@ var WS_URL=(location.protocol==='https:'?'wss':'ws')+'://'+location.hostname+(_w
 var AUDIENCE_URL='__AUDIENCE_URL__';
 var TOTAL=__TOTAL__;
 var LINE_REVEAL=__LINE_REVEAL__;
+var SHOW_QR=__SHOW_QR__;
 var MIRROR=location.hash==='#mirror';
 var PRINT=location.hash==='#print';
 var current=0;
@@ -436,11 +464,16 @@ if(!MIRROR){
 }
 
 // QR
-new QRCode(document.getElementById('qrcode'),{
-  text:AUDIENCE_URL,width:128,height:128,
-  colorDark:'#ffffff',colorLight:'rgba(0,0,0,0)',
-  correctLevel:QRCode.CorrectLevel.M
-});
+if(SHOW_QR){
+  var qrMount=document.getElementById('qrcode');
+  if(qrMount&&typeof QRCode!=='undefined'){
+    new QRCode(qrMount,{
+      text:AUDIENCE_URL,width:128,height:128,
+      colorDark:'#ffffff',colorLight:'rgba(0,0,0,0)',
+      correctLevel:QRCode.CorrectLevel.M
+    });
+  }
+}
 
 // Sidebar
 var sidebarContent=document.getElementById('sidebar-content');
@@ -684,7 +717,12 @@ document.querySelectorAll('pre code:not(.language-dot)').forEach(function(el){
 })();
 </script>"""
 
-def build_html(slide_texts: list[str], doc_title: str = "Presentation", line_reveal: bool = False) -> str:
+def build_html(
+    slide_texts: list[str],
+    doc_title: str = "Presentation",
+    line_reveal: bool = False,
+    show_qr: bool = True,
+) -> str:
     total = len(slide_texts) + 1  # +1 for stats slide appended below
 
     slides_html_parts = []
@@ -712,9 +750,15 @@ def build_html(slide_texts: list[str], doc_title: str = "Presentation", line_rev
         .replace("__AUDIENCE_URL__", AUDIENCE_URL)
         .replace("__TOTAL__", str(total))
         .replace("__LINE_REVEAL__", "true" if line_reveal else "false")
+        .replace("__SHOW_QR__", "true" if show_qr else "false")
     )
 
     escaped_title = _esc.escape(doc_title)
+    qr_script = f'<script src="{_QR_CDN}"></script>' if show_qr else ""
+    qr_overlay = """<div id="qr-overlay" title="Audience companion">
+  <div id="qrcode"></div>
+  <div id="qr-label">scan to join</div>
+</div>""" if show_qr else ""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -724,7 +768,7 @@ def build_html(slide_texts: list[str], doc_title: str = "Presentation", line_rev
 <title>{escaped_title}</title>
 <link rel="stylesheet" href="{_FA_CDN}">
 <link rel="stylesheet" href="{_HLJS_CSS}">
-<script src="{_QR_CDN}"></script>
+{qr_script}
 {_MATHJAX_CONFIG}
 <script async src="{_MATHJAX}"></script>
 <style>{_CSS}</style>
@@ -743,10 +787,7 @@ def build_html(slide_texts: list[str], doc_title: str = "Presentation", line_rev
   <button id="btn-next" aria-label="Next">&#8594;</button>
 </nav>
 
-<div id="qr-overlay" title="Audience companion">
-  <div id="qrcode"></div>
-  <div id="qr-label">scan to join</div>
-</div>
+{qr_overlay}
 
 <div id="like-sidebar">
   <button id="sidebar-toggle" aria-label="Toggle likes">&#9829;</button>
@@ -783,6 +824,12 @@ def main() -> None:
         default="on" if LINE_REVEAL_ENV else "off",
         help="Arrow keys reveal/hide lines before changing slide (default from LINE_REVEAL env).",
     )
+    p.add_argument(
+        "--qr",
+        choices=["on", "off"],
+        default="on" if SHOW_QR_ENV else "off",
+        help="Show audience QR overlay on slides (default from SHOW_QR env).",
+    )
     args = p.parse_args()
 
     try:
@@ -805,6 +852,7 @@ def main() -> None:
         slide_texts,
         doc_title=args.title,
         line_reveal=(args.line_reveal == "on"),
+        show_qr=(args.qr == "on"),
     )
 
     with open(args.output, "w", encoding="utf-8") as f:  # M1: context manager

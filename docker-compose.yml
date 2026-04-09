@@ -33,6 +33,7 @@ services:
       - PORT=${PORT:-8000}
       - WS_SCHEME=${WS_SCHEME:-ws}
       - LINE_REVEAL=${LINE_REVEAL:-off}
+      - SHOW_QR=${SHOW_QR:-on}
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     profiles: ["convert"]

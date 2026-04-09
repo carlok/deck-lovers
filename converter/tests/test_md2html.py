@@ -88,6 +88,19 @@ class TestMd:
         html = md2html._md("- item one\n- item two")
         assert "<ul" in html and "<li" in html
 
+    def test_nested_unordered_list_two_space_indent(self):
+        md = (
+            "- Parent item\n"
+            "  - Child one\n"
+            "  - Child two\n"
+        )
+        html = md2html._md(md)
+        assert "<ul>" in html
+        assert "<li>Parent item" in html
+        assert "<li>Child one" in html and "<li>Child two" in html
+        # Nested list should render as <li>Parent...<ul>...</ul></li>
+        assert "Parent item<ul>" in html.replace("\n", "")
+
     def test_fenced_code_block(self):
         html = md2html._md("```python\nprint('hi')\n```")
         assert "<code" in html
@@ -158,6 +171,11 @@ class TestBuildHtml:
     def test_line_reveal_token_injected(self):
         html = md2html.build_html(self.SLIDES, doc_title="Deck", line_reveal=True)
         assert "var LINE_REVEAL=true;" in html
+
+    def test_qr_toggle_off_removes_overlay(self):
+        html = md2html.build_html(self.SLIDES, doc_title="Deck", show_qr=False)
+        assert 'id="qr-overlay"' not in html
+        assert "var SHOW_QR=false;" in html
 
     def test_landscape_print_css(self):
         html = self._html()
@@ -269,6 +287,29 @@ class TestMain:
         md2html.main()
         content = out_file.read_text(encoding="utf-8")
         assert "var LINE_REVEAL=true;" in content
+
+    def test_cli_qr_off(self, tmp_path, monkeypatch):
+        import sys
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## Slide\n\nBody", encoding="utf-8")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "md2html.py",
+                "--input",
+                str(md_file),
+                "--output",
+                str(out_file),
+                "--qr",
+                "off",
+            ],
+        )
+        md2html.main()
+        content = out_file.read_text(encoding="utf-8")
+        assert 'id="qr-overlay"' not in content
+        assert "var SHOW_QR=false;" in content
 
     def test_missing_input_exits(self, tmp_path, monkeypatch):
         import sys
