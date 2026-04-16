@@ -258,11 +258,28 @@ All generated files land on the host in `./output/`:
 ```
 output/
 ├── slides.md          ← intermediate Markdown (editable)
+├── img/               ← slide image assets (referenced from Markdown)
 └── slides.html        ← final standalone deck (open directly in browser)
 ```
 
 `slides.html` is fully self-contained — open it with `file://` for offline use,
 or serve it via the FastAPI server for live audience features.
+
+Image assets from Markdown can be referenced via:
+
+```md
+![Plant diagram](img/plant.png)
+```
+
+### Image conventions
+
+Use images from `output/img/` and reference them in Markdown with one of these styles:
+
+- `img/plant.png` (recommended)
+- `./img/plant.png`
+- `/img/plant.png`
+
+Recommended style is `img/...` because it stays clean and portable in Markdown sources.
 
 ---
 

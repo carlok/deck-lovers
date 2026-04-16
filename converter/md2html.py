@@ -4,6 +4,7 @@ md2html.py — Convert slides.md to a beautiful standalone HTML slide deck.
 
 Slide separator : ---  (on its own line, no Reveal.js required)
 YouTube embed   : !youtube[Title](url-or-video-id)
+Slide images    : ![Alt](img/image.png)
 Checklists      : - [ ] open   /  - [x] done
 """
 
@@ -78,8 +79,29 @@ def _preprocess(text: str) -> str:
         text,
         flags=re.MULTILINE,
     )
+    text = _normalize_image_paths(text)
     text = _normalize_two_space_nested_lists(text)
     return text
+
+def _normalize_image_paths(text: str) -> str:
+    """Normalize Markdown image URLs for output/img assets."""
+    def _img_replace(match: re.Match[str]) -> str:
+        alt = match.group(1)
+        target = match.group(2).strip()
+        if not target:
+            return match.group(0)
+        parts = target.split(maxsplit=1)
+        url = parts[0]
+        rest = f" {parts[1]}" if len(parts) > 1 else ""
+        if url.startswith("<") and url.endswith(">"):
+            inner = url[1:-1]
+            if inner.startswith("./img/"):
+                url = "<" + f"/{inner[2:]}" + ">"
+        elif url.startswith("./img/"):
+            url = f"/{url[2:]}"
+        return f"![{alt}]({url}{rest})"
+
+    return re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', _img_replace, text)
 
 def _normalize_two_space_nested_lists(text: str) -> str:
     """Treat `  - child` as nested when following a list item.
@@ -254,6 +276,18 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
 .yt-wrap{position:relative;width:100%;max-width:min(960px,88vw);aspect-ratio:16/9;
   border-radius:14px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.18);margin:.4em 0;}
 .yt-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;}
+
+/* Images */
+.slide img{
+  display:block;
+  max-width:min(100%,1200px);
+  max-height:62vh;
+  width:auto;
+  height:auto;
+  margin:.45em auto;
+  border-radius:10px;
+  box-shadow:0 8px 28px rgba(0,0,0,.16);
+}
 
 /* Stats slide */
 #stats-slide h2{margin-bottom:.9em;}

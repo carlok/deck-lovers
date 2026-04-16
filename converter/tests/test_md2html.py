@@ -114,6 +114,14 @@ class TestMd:
         html = md2html._md("[Click](https://example.com)")
         assert 'href="https://example.com"' in html
 
+    def test_image_path_left_relative_for_img_folder(self):
+        html = md2html._md("![Demo](img/diagram.png)")
+        assert 'src="img/diagram.png"' in html
+
+    def test_image_path_with_dot_slash_rewritten(self):
+        html = md2html._md("![Demo](./img/diagram.png)")
+        assert 'src="/img/diagram.png"' in html
+
     def test_checklist_unchecked_raw(self):
         # _md applies postprocess inline; cb-open / task-open class expected
         html = md2html._md("- [ ] Todo item")
@@ -219,6 +227,10 @@ class TestBuildHtml:
         slides = ["## Icons\n\n<i class=\"fa-brands fa-github\"></i>"]
         html = self._html(slides)
         assert "fa-github" in html
+
+    def test_image_css_rule_present(self):
+        html = self._html(["## Image\n\n![Demo](img/pic.png)"])
+        assert ".slide img{" in html
 
 
 # ── WebSocket / QR URL tokens ─────────────────────────────────────────────────
