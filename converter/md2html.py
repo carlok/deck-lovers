@@ -323,25 +323,25 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
   letter-spacing:.12em;margin-top:5px;}
 
 /* Like sidebar */
-#like-sidebar{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:200;
-  display:flex;align-items:center;}
-#sidebar-toggle{background:var(--accent);color:#fff;border:none;border-radius:10px 0 0 10px;
-  width:38px;height:90px;cursor:pointer;font-size:1rem;display:flex;align-items:center;
-  justify-content:center;box-shadow:-3px 0 16px rgba(233,69,96,.35);
-  transition:background .14s;flex-direction:column;gap:4px;}
+#like-sidebar{position:fixed;right:0;top:18px;z-index:200;
+  display:flex;align-items:flex-start;}
+#sidebar-toggle{background:var(--accent);color:#fff;border:none;border-radius:8px 0 0 8px;
+  width:34px;height:42px;cursor:pointer;font-size:.9rem;display:flex;align-items:center;
+  justify-content:center;box-shadow:-3px 0 14px rgba(233,69,96,.32);
+  transition:background .14s;flex-direction:column;gap:0;}
 #sidebar-toggle:hover{background:#C73E54;}
 #sidebar-content{background:rgba(26,35,51,.94);backdrop-filter:blur(14px);
-  border-radius:10px 0 0 10px;padding:16px 14px;width:168px;overflow:hidden;
+  border-radius:8px 0 0 8px;padding:10px 10px;width:128px;overflow:hidden;
   transition:width .3s var(--ease),padding .3s var(--ease),opacity .3s var(--ease);}
 #sidebar-content.hidden{width:0;padding:0;opacity:0;pointer-events:none;}
-#like-count{font-size:3.2rem;font-weight:800;color:var(--accent);text-align:center;
+#like-count{font-size:2.15rem;font-weight:800;color:var(--accent);text-align:center;
   line-height:1;font-variant-numeric:tabular-nums;}
 #like-count.pulse{animation:count-pulse .35s var(--ease);}
 @keyframes count-pulse{0%{transform:scale(1)}45%{transform:scale(1.38)}100%{transform:scale(1)}}
-#like-sub{color:rgba(255,255,255,.35);font-size:.65rem;text-align:center;
-  margin-bottom:10px;letter-spacing:.06em;}
-#like-feed{display:flex;flex-direction:column;gap:4px;overflow:hidden;max-height:140px;}
-.like-entry{color:rgba(255,255,255,.85);font-size:.68rem;padding:3px 8px;border-radius:20px;
+#like-sub{color:rgba(255,255,255,.35);font-size:.55rem;text-align:center;
+  margin-bottom:7px;letter-spacing:.06em;}
+#like-feed{display:flex;flex-direction:column;gap:3px;overflow:hidden;max-height:92px;}
+.like-entry{color:rgba(255,255,255,.85);font-size:.6rem;padding:2px 6px;border-radius:20px;
   background:rgba(233,69,96,.22);animation:slide-in-r .28s var(--ease);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 @keyframes slide-in-r{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
@@ -825,7 +825,7 @@ def build_html(
 
 <div id="like-sidebar">
   <button id="sidebar-toggle" aria-label="Toggle likes">&#9829;</button>
-  <div id="sidebar-content">
+  <div id="sidebar-content" class="hidden">
     <div id="like-count">0</div>
     <div id="like-sub">likes this slide</div>
     <div id="like-feed"></div>
