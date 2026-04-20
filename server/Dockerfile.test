@@ -5,6 +5,7 @@ COPY requirements.txt requirements-test.txt ./
 RUN pip install --no-cache-dir -r requirements.txt -r requirements-test.txt
 
 COPY server.py audience.html ./
+COPY src/ ./src/
 COPY tests/ ./tests/
 
 CMD ["pytest", "tests/", "--cov=server", "--cov-report=term-missing", \

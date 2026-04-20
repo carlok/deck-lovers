@@ -2,6 +2,7 @@
 Unit tests for server.py — FastAPI WebSocket server.
 Run inside the test container:  pytest --cov=server --cov-report=term-missing
 """
+import asyncio
 import json
 import os
 import sys
@@ -21,6 +22,7 @@ os.environ.setdefault("PROJECTOR_PASSWORD", "testpass")
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from fastapi.testclient import TestClient
+import server as server_mod
 from server import app, PROJECTOR_PASSWORD
 
 client = TestClient(app)
@@ -123,6 +125,16 @@ class TestAudience:
         r = client.get("/audience")
         assert "<html" in r.text.lower()
 
+    def test_audience_css_route(self):
+        r = client.get("/audience.css")
+        assert r.status_code == 200
+        assert "text/css" in r.headers["content-type"]
+
+    def test_audience_js_route(self):
+        r = client.get("/audience.js")
+        assert r.status_code == 200
+        assert "application/javascript" in r.headers["content-type"]
+
 
 # ── 404 on unknown routes ─────────────────────────────────────────────────────
 
@@ -134,6 +146,18 @@ class TestUnknownRoutes:
     def test_unknown_method_is_405(self):
         r = client.post("/health")
         assert r.status_code == 405
+
+
+class TestMirrorAndPrint:
+    def test_mirror_returns_html(self):
+        r = client.get("/mirror")
+        assert r.status_code == 200
+        assert "text/html" in r.headers["content-type"]
+
+    def test_print_returns_html(self):
+        r = client.get("/print")
+        assert r.status_code == 200
+        assert "text/html" in r.headers["content-type"]
 
 
 # ── WebSocket /ws ─────────────────────────────────────────────────────────────
@@ -225,3 +249,78 @@ class TestWebSocket:
         with client.websocket_connect("/ws") as ws:
             name = _register(ws, "audience")
             assert isinstance(name, str) and len(name) > 0
+
+    def test_request_state_returns_slide_update(self):
+        with client.websocket_connect("/ws") as ws:
+            _register(ws, "audience")
+            ws.send_json({"type": "request_state"})
+            msg = ws.receive_json()
+            assert msg["type"] == "slide_update"
+
+    def test_slide_change_broadcasts_to_audience(self):
+        with client.websocket_connect("/ws") as proj:
+            _register(proj, "projector")
+            proj.send_json({"type": "slide_change", "index": 1, "reveal": 2})
+            assert server_mod.current_slide == 0  # clamped when slides_total is 0
+            assert server_mod.current_reveal == 2
+
+    def test_presentation_state_broadcasts_to_audience(self):
+        with client.websocket_connect("/ws") as proj:
+            _register(proj, "projector")
+            proj.send_json({"type": "presentation_state", "index": 3, "reveal": 1})
+            assert server_mod.current_slide == 0  # clamped when slides_total is 0
+            assert server_mod.current_reveal == 1
+
+    def test_slides_meta_updates_total_for_new_clients(self):
+        with client.websocket_connect("/ws") as proj:
+            _register(proj, "projector")
+            proj.send_json(
+                {
+                    "type": "slides_meta",
+                    "slides": [
+                        {"title": "S1", "summary": "A"},
+                        {"title": "S2", "summary": "B"},
+                    ],
+                }
+            )
+
+            with client.websocket_connect("/ws") as aud:
+                _ = aud.receive_json()  # assigned_name
+                state = aud.receive_json()  # slide_update
+                assert state["type"] == "slide_update"
+                assert state["total"] == 2
+
+    def test_like_cap_is_enforced(self):
+        original_cap = server_mod.LIKES_CAP
+        server_mod.LIKES_CAP = 2
+        try:
+            with client.websocket_connect("/ws") as proj:
+                _register(proj, "projector")
+                with client.websocket_connect("/ws") as aud:
+                    _register(aud, "audience")
+                    aud.send_json({"type": "like", "slide": 0})
+                    m1 = proj.receive_json()
+                    aud.send_json({"type": "like", "slide": 0})
+                    m2 = proj.receive_json()
+                    aud.send_json({"type": "like", "slide": 0})
+                    m3 = proj.receive_json()
+                    assert m1["count"] == 1
+                    assert m2["count"] == 2
+                    assert m3["count"] == 2
+        finally:
+            server_mod.LIKES_CAP = original_cap
+
+
+class TestHelpers:
+    def test_send_projector_resets_on_send_error(self):
+        class _BadWs:
+            async def send_text(self, _):
+                raise RuntimeError("boom")
+
+        prev = server_mod.projector_ws
+        server_mod.projector_ws = _BadWs()
+        try:
+            asyncio.run(server_mod._send_projector({"type": "x"}))
+            assert server_mod.projector_ws is None
+        finally:
+            server_mod.projector_ws = prev

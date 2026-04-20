@@ -38,7 +38,23 @@ services:
     cap_drop: [ALL]
     profiles: ["convert"]
 
-  # ── Step 3: Long-running FastAPI WebSocket server ─────────────────────────
+  # ── Step 3 (optional): Server-side PDF export via headless Chromium ───────
+  pdf:
+    build:
+      context: ./converter
+      dockerfile: Dockerfile.pdf
+    working_dir: /workspace
+    volumes:
+      - ./output:/workspace
+      - ./converter/export_pdf.mjs:/app/export_pdf.mjs:ro
+    command:
+      - /workspace/slides.html
+      - /workspace/slides.pdf
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    profiles: ["convert"]
+
+  # ── Step 4: Long-running FastAPI WebSocket server ─────────────────────────
   server:
     build:
       context: ./server

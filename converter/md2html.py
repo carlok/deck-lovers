@@ -172,7 +172,7 @@ _CSS = """\
   --dark:#1A2333;--text:#2C3E50;--muted:#7F8C8D;
   --bg:#FAFAF8;--bg-cream:#FFF9F0;--border:#E8E4DF;--link:#3498DB;
   --mono:"SF Mono","Fira Code","Consolas",monospace;
-  --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --sans:system-ui,-apple-system,"Segoe UI","Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif;
   --ease:cubic-bezier(.4,0,.2,1);--dur:360ms;
 }
 html,body{height:100%;overflow:hidden;background:var(--bg);font-family:var(--sans);
@@ -659,7 +659,7 @@ if(PRINT){
         _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',function(){
           var st=document.getElementById('_pdf_st');
           var bar=document.getElementById('_pdf_bar');
-          var pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'px',format:[1280,720],hotfixes:['px_scaling']});
+          var pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'px',format:[3840,2160],hotfixes:['px_scaling']});
           var i=0;
           function capture(){
             if(i>=slides.length){
@@ -670,9 +670,9 @@ if(PRINT){
             }
             if(st)st.textContent='Slide '+(i+1)+' / '+slides.length;
             if(bar)bar.style.width=Math.round((i/slides.length)*100)+'%';
-            html2canvas(slides[i],{scale:1,width:1280,height:720,useCORS:true,logging:false,backgroundColor:'#ffffff'}).then(function(canvas){
-              if(i>0)pdf.addPage([1280,720],'landscape');
-              pdf.addImage(canvas.toDataURL('image/jpeg',0.93),'JPEG',0,0,1280,720);
+            html2canvas(slides[i],{scale:3,width:1280,height:720,useCORS:true,logging:false,backgroundColor:'#ffffff'}).then(function(canvas){
+              if(i>0)pdf.addPage([3840,2160],'landscape');
+              pdf.addImage(canvas.toDataURL('image/png'),'PNG',0,0,3840,2160);
               i++;capture();
             });
           }
@@ -756,8 +756,9 @@ def build_html(
     doc_title: str = "Presentation",
     line_reveal: bool = False,
     show_qr: bool = True,
+    include_stats: bool = True,
 ) -> str:
-    total = len(slide_texts) + 1  # +1 for stats slide appended below
+    total = len(slide_texts) + (1 if include_stats else 0)
 
     slides_html_parts = []
     for i, raw in enumerate(slide_texts):
@@ -767,15 +768,16 @@ def build_html(
             f'  <div class="slide {cls}" data-index="{i}">\n{inner}\n  </div>'
         )
 
-    # Stats slide (always last)
-    stats_idx = len(slide_texts)
-    slides_html_parts.append(
-        f'  <div class="slide content" id="stats-slide" data-index="{stats_idx}">\n'
-        f'  <h2>Audience Engagement</h2>\n'
-        f'  <div id="stats-chart" class="stats-grid"></div>\n'
-        f'  <p style="margin-top:1.2em;font-size:.8em;color:var(--muted)">top 10 slides · ranked by likes · updates live</p>\n'
-        f'  </div>'
-    )
+    # Stats slide (optional, last)
+    if include_stats:
+        stats_idx = len(slide_texts)
+        slides_html_parts.append(
+            f'  <div class="slide content" id="stats-slide" data-index="{stats_idx}">\n'
+            f'  <h2>Audience Engagement</h2>\n'
+            f'  <div id="stats-chart" class="stats-grid"></div>\n'
+            f'  <p style="margin-top:1.2em;font-size:.8em;color:var(--muted)">top 10 slides · ranked by likes · updates live</p>\n'
+            f'  </div>'
+        )
 
     slides_html = "\n".join(slides_html_parts)
 
@@ -864,6 +866,12 @@ def main() -> None:
         default="on" if SHOW_QR_ENV else "off",
         help="Show audience QR overlay on slides (default from SHOW_QR env).",
     )
+    p.add_argument(
+        "--stats",
+        choices=["on", "off"],
+        default="on",
+        help="Append final audience engagement stats slide.",
+    )
     args = p.parse_args()
 
     try:
@@ -878,7 +886,8 @@ def main() -> None:
         print("ERROR: no slides found (are they separated by ---?)", file=sys.stderr)
         sys.exit(1)
 
-    print(f"[md2html] {len(slide_texts)} slides + stats slide")
+    stats_state = "with stats slide" if args.stats == "on" else "without stats slide"
+    print(f"[md2html] {len(slide_texts)} slides ({stats_state})")
     print(f"[md2html] SERVER_HOST={SERVER_HOST}  WS={WS_URL}")
     print(f"[md2html] Audience: {AUDIENCE_URL}")
 
@@ -887,6 +896,7 @@ def main() -> None:
         doc_title=args.title,
         line_reveal=(args.line_reveal == "on"),
         show_qr=(args.qr == "on"),
+        include_stats=(args.stats == "on"),
     )
 
     with open(args.output, "w", encoding="utf-8") as f:  # M1: context manager

@@ -187,11 +187,12 @@ class TestBuildHtml:
 
     def test_landscape_print_css(self):
         html = self._html()
-        # PDF generated via html2canvas + jsPDF at 1280×720px (16:9 landscape)
+        # PDF generated via html2canvas + jsPDF at 4K (3840x2160) from 1280x720*3 capture
         assert "html2canvas" in html
         assert "jsPDF" in html
-        assert "1280" in html
-        assert "720" in html
+        assert "3840" in html
+        assert "2160" in html
+        assert "scale:3" in html
 
     def test_font_awesome_cdn(self):
         html = self._html()
@@ -202,6 +203,12 @@ class TestBuildHtml:
         assert "stats" in html.lower() or "likes" in html.lower()
         assert "top 10" in html.lower()
         assert "slice(0,10)" in html
+
+    def test_stats_slide_can_be_disabled(self):
+        html = md2html.build_html(self.SLIDES, doc_title="Deck", include_stats=False)
+        assert 'id="stats-slide"' not in html
+        # Total slides should not include +1 stats page
+        assert "var TOTAL=2;" in html
 
     def test_checklist_unchecked_postprocessed(self):
         # build_html applies postprocess; ☐ or task-open class expected
@@ -322,6 +329,28 @@ class TestMain:
         content = out_file.read_text(encoding="utf-8")
         assert 'id="qr-overlay"' not in content
         assert "var SHOW_QR=false;" in content
+
+    def test_cli_stats_off(self, tmp_path, monkeypatch):
+        import sys
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## Slide\n\nBody", encoding="utf-8")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "md2html.py",
+                "--input",
+                str(md_file),
+                "--output",
+                str(out_file),
+                "--stats",
+                "off",
+            ],
+        )
+        md2html.main()
+        content = out_file.read_text(encoding="utf-8")
+        assert 'id="stats-slide"' not in content
 
     def test_missing_input_exits(self, tmp_path, monkeypatch):
         import sys

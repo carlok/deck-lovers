@@ -1,0 +1,15 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    ca-certificates \
+    fonts-dejavu-core \
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm init -y && npm install puppeteer-core@24
+
+ENTRYPOINT ["node", "/app/export_pdf.mjs"]

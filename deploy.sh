@@ -4,10 +4,12 @@
 # LOCAL:
 #   ./deploy.sh                          # auto-detects runtime + WiFi IP
 #   ./deploy.sh --convert-only           # convert only, no server
+#   ./deploy.sh --pdf-only               # convert + server-side PDF only
 #   ./deploy.sh --serve-only             # skip conversion, start server
 #   ./deploy.sh --slides-file tmp/presentation_from_tex.md
 #   ./deploy.sh --line-reveal            # arrows reveal lines before changing slide
 #   ./deploy.sh --no-qr                  # hide audience QR overlay in projector HTML
+#   ./deploy.sh --no-stats               # remove final audience scoring slide
 #   ./deploy.sh --qr off                 # same as --no-qr (general form)
 #   ./deploy.sh --cloudflare <url>       # rebake Cloudflare tunnel URL into QR code
 #
@@ -35,16 +37,19 @@ set -euo pipefail
 # ── Parse flags ───────────────────────────────────────────────────────────────
 CONVERT=true
 SERVE=true
+PDF_ONLY=false
 SETUP=false
 HTTPS=false
 CF_URL=""     # --cloudflare <url>  e.g. https://silver-toast.trycloudflare.com
 SLIDES_FILE="" # --slides-file <path>  e.g. tmp/presentation_from_tex.md
 LINE_REVEAL="off" # --line-reveal
 SHOW_QR="on" # --qr on|off or --no-qr
+SHOW_STATS="on" # --stats on|off or --no-stats
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --convert-only) SERVE=false;    shift ;;
+    --pdf-only)     PDF_ONLY=true; SERVE=false; CONVERT=true; shift ;;
     --serve-only)   CONVERT=false;  shift ;;
     --setup)        SETUP=true;     shift ;;
     --https)        HTTPS=true;     shift ;;
@@ -54,8 +59,12 @@ while [[ $# -gt 0 ]]; do
       LINE_REVEAL="on"; shift ;;
     --no-qr)
       SHOW_QR="off"; shift ;;
+    --no-stats)
+      SHOW_STATS="off"; shift ;;
     --qr)
       SHOW_QR="${2:?'--qr requires on|off'}"; shift 2 ;;
+    --stats)
+      SHOW_STATS="${2:?'--stats requires on|off'}"; shift 2 ;;
     --cloudflare)
       CF_URL="${2:?'--cloudflare requires a URL argument'}";  shift 2 ;;
     *) shift ;;
@@ -64,6 +73,10 @@ done
 
 if [[ "$SHOW_QR" != "on" && "$SHOW_QR" != "off" ]]; then
   echo "ERROR: --qr accepts only 'on' or 'off'" >&2
+  exit 1
+fi
+if [[ "$SHOW_STATS" != "on" && "$SHOW_STATS" != "off" ]]; then
+  echo "ERROR: --stats accepts only 'on' or 'off'" >&2
   exit 1
 fi
 
@@ -152,6 +165,8 @@ printf "│  port    : %-30s│\n" "$PORT"
 [[ -n "$SLIDES_FILE" ]] && printf "│  slides  : %-30s│\n" "$SLIDES_FILE"
 printf "│  reveals : %-30s│\n" "$LINE_REVEAL"
 printf "│  qr      : %-30s│\n" "$SHOW_QR"
+printf "│  stats   : %-30s│\n" "$SHOW_STATS"
+printf "│  pdf     : %-30s│\n" "$PDF_ONLY"
 [[ "$MODE" == "remote" ]] && printf "│  vps     : %-30s│\n" "$VPS"
 echo "└─────────────────────────────────────────┘"
 echo
@@ -164,7 +179,7 @@ _convert() {
   local host="$1"
 
   echo "▶ Building images…"
-  $COMPOSE build --pull md2html server
+  $COMPOSE build --pull md2html pdf server
   echo
 
   # Ensure the output dir exists and is writable by any container UID.
@@ -208,8 +223,24 @@ _convert() {
   # (e.g. appuser/UID-1000 from an old image) that the current container can't overwrite.
   rm -f output/slides.html
   SERVER_HOST="$host" PORT="$PORT" WS_SCHEME="$WS_SCHEME" LINE_REVEAL="$LINE_REVEAL" SHOW_QR="$SHOW_QR" \
-    $COMPOSE run --rm --remove-orphans md2html
+    $COMPOSE run --rm --remove-orphans md2html \
+      python md2html.py \
+      --input /workspace/slides.md \
+      --output /workspace/slides.html \
+      --line-reveal "$LINE_REVEAL" \
+      --qr "$SHOW_QR" \
+      --stats "$SHOW_STATS" \
+      --title "Presentation"
   echo "  ✓ output/slides.html ready"
+  echo
+}
+
+# ── Shared: server-side PDF export via headless browser ──────────────────────
+_export_pdf() {
+  echo "▶ 3/3  pdf      output/slides.html → output/slides.pdf"
+  rm -f output/slides.pdf
+  $COMPOSE run --rm --remove-orphans pdf
+  echo "  ✓ output/slides.pdf ready"
   echo
 }
 
@@ -313,7 +344,7 @@ REMOTE
     echo
 
     echo "▶ Building images on VPS…"
-    $SSH "$VPS" "cd /root/deck-lovers && ${COMPOSE} build md2html server"  # C6: use detected runtime
+    $SSH "$VPS" "cd /root/deck-lovers && ${COMPOSE} build md2html pdf server"  # C6: use detected runtime
     echo "  ✓ images built"
     echo
   fi
@@ -344,6 +375,9 @@ else
 
   if $CONVERT; then
     _convert "$HOST"
+    if $PDF_ONLY; then
+      _export_pdf
+    fi
   fi
 
   if $SERVE; then
@@ -354,7 +388,12 @@ else
       $COMPOSE up server                        # plain HTTP (default local)
     fi
   else
-    _endpoints "$HOST"
+    if $PDF_ONLY; then
+      echo "PDF generated at: output/slides.pdf"
+      echo
+    else
+      _endpoints "$HOST"
+    fi
   fi
 
 fi
