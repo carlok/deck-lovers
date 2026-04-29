@@ -105,9 +105,16 @@ class TestSlides:
         assert "Test Slides" in r.text
 
     def test_missing_slides_returns_503(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("WORKSPACE_PATH", str(tmp_path))
-        empty_workspace = tmp_path  # no slides.html here
-        assert not (empty_workspace / "slides.html").exists()
+        empty_file = tmp_path / "missing-slides.html"
+        assert not empty_file.exists()
+        monkeypatch.setattr(server_mod, "SLIDES_HTML", empty_file)
+        # Disable projector-page auth to reach the missing file branch.
+        monkeypatch.setattr(server_mod, "PROJECTOR_PASSWORD", "")
+        r = client.get("/")
+        assert r.status_code == 503
+        payload = r.json()
+        assert payload["error"] == "slides.html not found in workspace."
+        assert "conversion pipeline" in payload["hint"]
 
 
 # ── GET /audience ─────────────────────────────────────────────────────────────
@@ -158,6 +165,40 @@ class TestMirrorAndPrint:
         r = client.get("/print")
         assert r.status_code == 200
         assert "text/html" in r.headers["content-type"]
+
+    def test_mirror_returns_503_when_slides_missing(self, tmp_path, monkeypatch):
+        missing = tmp_path / "missing-mirror.html"
+        monkeypatch.setattr(server_mod, "SLIDES_HTML", missing)
+        r = client.get("/mirror")
+        assert r.status_code == 503
+        assert r.json()["error"] == "slides.html not found"
+
+    def test_print_returns_503_when_slides_missing(self, tmp_path, monkeypatch):
+        missing = tmp_path / "missing-print.html"
+        monkeypatch.setattr(server_mod, "SLIDES_HTML", missing)
+        r = client.get("/print")
+        assert r.status_code == 503
+        assert r.json()["error"] == "slides.html not found"
+
+
+class TestAudienceAssetsMissing:
+    def test_audience_missing_returns_503(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(server_mod, "AUDIENCE_HTML", tmp_path / "audience.html")
+        r = client.get("/audience")
+        assert r.status_code == 503
+        assert r.json()["error"] == "audience.html missing"
+
+    def test_audience_css_missing_returns_503(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(server_mod, "AUDIENCE_SRC", tmp_path / "src")
+        r = client.get("/audience.css")
+        assert r.status_code == 503
+        assert r.json()["error"] == "audience.css missing"
+
+    def test_audience_js_missing_returns_503(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(server_mod, "AUDIENCE_SRC", tmp_path / "src")
+        r = client.get("/audience.js")
+        assert r.status_code == 503
+        assert r.json()["error"] == "audience.js missing"
 
 
 # ── WebSocket /ws ─────────────────────────────────────────────────────────────
@@ -244,6 +285,15 @@ class TestWebSocket:
             _register(ws, "audience")
             ws.send_json({"type": "unknown_type", "data": "whatever"})
 
+    def test_invalid_json_message_ignored(self):
+        """Server should ignore malformed JSON frames."""
+        with client.websocket_connect("/ws") as ws:
+            _register(ws, "audience")
+            ws.send_text("{invalid json")
+            ws.send_json({"type": "request_state"})
+            msg = ws.receive_json()
+            assert msg["type"] == "slide_update"
+
     def test_generate_username_no_name(self):
         """Every new audience connection gets a unique auto-generated name."""
         with client.websocket_connect("/ws") as ws:
@@ -309,6 +359,15 @@ class TestWebSocket:
                     assert m3["count"] == 2
         finally:
             server_mod.LIKES_CAP = original_cap
+
+    def test_projector_secret_rejects_unauthorized_registration(self, monkeypatch):
+        monkeypatch.setattr(server_mod, "PROJECTOR_SECRET", "secret-token")
+        with client.websocket_connect("/ws") as ws:
+            _register(ws, "audience")
+            ws.send_json({"type": "register_projector"})
+            msg = ws.receive_json()
+            assert msg["type"] == "error"
+            assert msg["message"] == "Unauthorized"
 
 
 class TestHelpers:
