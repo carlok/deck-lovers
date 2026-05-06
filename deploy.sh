@@ -10,6 +10,7 @@
 #   ./deploy.sh --line-reveal            # arrows reveal lines before changing slide
 #   ./deploy.sh --no-qr                  # hide audience QR overlay in projector HTML
 #   ./deploy.sh --no-stats               # remove final audience scoring slide
+#   ./deploy.sh --pdf-quality 0.82       # smaller PDF / JPEG compression (default 0.92)
 #   ./deploy.sh --qr off                 # same as --no-qr (general form)
 #   ./deploy.sh --cloudflare <url>       # rebake Cloudflare tunnel URL into QR code
 #
@@ -45,6 +46,7 @@ SLIDES_FILE="" # --slides-file <path>  e.g. tmp/presentation_from_tex.md
 LINE_REVEAL="off" # --line-reveal
 SHOW_QR="on" # --qr on|off or --no-qr
 SHOW_STATS="on" # --stats on|off or --no-stats
+PDF_QUALITY="${PDF_QUALITY:-0.92}" # --pdf-quality <0.5–1> or PDF_QUALITY env
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -65,6 +67,8 @@ while [[ $# -gt 0 ]]; do
       SHOW_QR="${2:?'--qr requires on|off'}"; shift 2 ;;
     --stats)
       SHOW_STATS="${2:?'--stats requires on|off'}"; shift 2 ;;
+    --pdf-quality)
+      PDF_QUALITY="${2:?'--pdf-quality requires a number 0.5–1 (e.g. 0.85)'}"; shift 2 ;;
     --cloudflare)
       CF_URL="${2:?'--cloudflare requires a URL argument'}";  shift 2 ;;
     *) shift ;;
@@ -166,6 +170,7 @@ printf "│  port    : %-30s│\n" "$PORT"
 printf "│  reveals : %-30s│\n" "$LINE_REVEAL"
 printf "│  qr      : %-30s│\n" "$SHOW_QR"
 printf "│  stats   : %-30s│\n" "$SHOW_STATS"
+printf "│  pdf-q   : %-30s│\n" "$PDF_QUALITY"
 printf "│  pdf     : %-30s│\n" "$PDF_ONLY"
 [[ "$MODE" == "remote" ]] && printf "│  vps     : %-30s│\n" "$VPS"
 echo "└─────────────────────────────────────────┘"
@@ -230,6 +235,7 @@ _convert() {
       --line-reveal "$LINE_REVEAL" \
       --qr "$SHOW_QR" \
       --stats "$SHOW_STATS" \
+      --pdf-quality "$PDF_QUALITY" \
       --title "Presentation"
   echo "  ✓ output/slides.html ready"
   echo

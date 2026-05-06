@@ -226,6 +226,10 @@ VPS_PORT=2222 VPS=root@YOUR_SERVER_IP ./deploy.sh
 
 # High-quality PDF from a custom deck, no QR, no stats slide
 ./deploy.sh --pdf-only --slides-file tmp/cottonia_slides2.md --no-qr --no-stats
+
+# Smaller PDF (JPEG quality; default 0.92). Decks are rasterized at 16:9 — not vector text.
+./deploy.sh --pdf-only --slides-file tmp/deck.md --no-qr --no-stats --pdf-quality 0.82
+# Same via env:  PDF_QUALITY=0.85 ./deploy.sh --pdf-only …
 ```
 
 ### Rebuild images after code changes
@@ -275,6 +279,8 @@ output/
 └── slides.html        ← final standalone deck (open directly in browser)
 └── slides.pdf         ← server-side generated PDF (`--pdf-only`)
 ```
+
+PDF export captures each slide as a high-resolution **JPEG inside the PDF** so file size stays modest while previews stay crisp. Older builds used uncompressed PNG snapshots, which could reach hundreds of MB; lowering `--pdf-quality` (for example `0.78–0.85`) reduces size further if you mainly have text slides.
 
 `slides.html` is fully self-contained — open it with `file://` for offline use,
 or serve it via the FastAPI server for live audience features.

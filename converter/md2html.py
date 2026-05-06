@@ -10,6 +10,7 @@ Checklists      : - [ ] open   /  - [x] done
 
 import argparse
 import html as _esc
+import json
 import os
 import re
 import sys
@@ -390,6 +391,7 @@ var AUDIENCE_URL='__AUDIENCE_URL__';
 var TOTAL=__TOTAL__;
 var LINE_REVEAL=__LINE_REVEAL__;
 var SHOW_QR=__SHOW_QR__;
+var PDF_JPEG_QUALITY=__PDF_JPEG_QUALITY__;
 var MIRROR=location.hash==='#mirror';
 var PRINT=location.hash==='#print';
 var current=0;
@@ -672,7 +674,7 @@ if(PRINT){
             if(bar)bar.style.width=Math.round((i/slides.length)*100)+'%';
             html2canvas(slides[i],{scale:3,width:1280,height:720,useCORS:true,logging:false,backgroundColor:'#ffffff'}).then(function(canvas){
               if(i>0)pdf.addPage([3840,2160],'landscape');
-              pdf.addImage(canvas.toDataURL('image/png'),'PNG',0,0,3840,2160);
+              pdf.addImage(canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY),'JPEG',0,0,3840,2160);
               i++;capture();
             });
           }
@@ -757,6 +759,7 @@ def build_html(
     line_reveal: bool = False,
     show_qr: bool = True,
     include_stats: bool = True,
+    pdf_jpeg_quality: float = 0.92,
 ) -> str:
     total = len(slide_texts) + (1 if include_stats else 0)
 
@@ -781,12 +784,17 @@ def build_html(
 
     slides_html = "\n".join(slides_html_parts)
 
+    q = float(pdf_jpeg_quality)
+    if not 0.5 <= q <= 1.0:
+        raise ValueError("pdf_jpeg_quality must be between 0.5 and 1.0 inclusive")
+
     js = (
         _JS_TEMPLATE
         .replace("__AUDIENCE_URL__", AUDIENCE_URL)
         .replace("__TOTAL__", str(total))
         .replace("__LINE_REVEAL__", "true" if line_reveal else "false")
         .replace("__SHOW_QR__", "true" if show_qr else "false")
+        .replace("__PDF_JPEG_QUALITY__", json.dumps(q))
     )
 
     escaped_title = _esc.escape(doc_title)
@@ -872,6 +880,13 @@ def main() -> None:
         default="on",
         help="Append final audience engagement stats slide.",
     )
+    p.add_argument(
+        "--pdf-quality",
+        type=float,
+        default=0.92,
+        metavar="Q",
+        help="JPEG quality (0.5–1) for #print / server PDF export — lower = smaller PDF (default: 0.92).",
+    )
     args = p.parse_args()
 
     try:
@@ -886,8 +901,17 @@ def main() -> None:
         print("ERROR: no slides found (are they separated by ---?)", file=sys.stderr)
         sys.exit(1)
 
+    if not 0.5 <= args.pdf_quality <= 1.0:
+        print(
+            "ERROR: --pdf-quality must be between 0.5 and 1.0 inclusive",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     stats_state = "with stats slide" if args.stats == "on" else "without stats slide"
-    print(f"[md2html] {len(slide_texts)} slides ({stats_state})")
+    print(
+        f"[md2html] {len(slide_texts)} slides ({stats_state}) — PDF JPEG Q={args.pdf_quality}"
+    )
     print(f"[md2html] SERVER_HOST={SERVER_HOST}  WS={WS_URL}")
     print(f"[md2html] Audience: {AUDIENCE_URL}")
 
@@ -897,6 +921,7 @@ def main() -> None:
         line_reveal=(args.line_reveal == "on"),
         show_qr=(args.qr == "on"),
         include_stats=(args.stats == "on"),
+        pdf_jpeg_quality=args.pdf_quality,
     )
 
     with open(args.output, "w", encoding="utf-8") as f:  # M1: context manager

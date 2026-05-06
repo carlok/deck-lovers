@@ -193,6 +193,21 @@ class TestBuildHtml:
         assert "3840" in html
         assert "2160" in html
         assert "scale:3" in html
+        assert "PDF_JPEG_QUALITY" in html
+        assert "toDataURL('image/jpeg'" in html
+        assert ",'JPEG'," in html
+
+    def test_pdf_jpeg_quality_baked_into_js(self):
+        html = md2html.build_html(
+            self.SLIDES,
+            doc_title="Deck",
+            pdf_jpeg_quality=0.85,
+        )
+        assert "PDF_JPEG_QUALITY=0.85" in html
+
+    def test_pdf_jpeg_quality_out_of_range_raises(self):
+        with pytest.raises(ValueError, match="pdf_jpeg_quality"):
+            md2html.build_html(self.SLIDES, doc_title="Deck", pdf_jpeg_quality=0.1)
 
     def test_font_awesome_cdn(self):
         html = self._html()
@@ -351,6 +366,49 @@ class TestMain:
         md2html.main()
         content = out_file.read_text(encoding="utf-8")
         assert 'id="stats-slide"' not in content
+
+    def test_cli_pdf_quality(self, tmp_path, monkeypatch):
+        import sys
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## Slide\n\nBody", encoding="utf-8")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "md2html.py",
+                "--input",
+                str(md_file),
+                "--output",
+                str(out_file),
+                "--pdf-quality",
+                "0.8",
+            ],
+        )
+        md2html.main()
+        content = out_file.read_text(encoding="utf-8")
+        assert "PDF_JPEG_QUALITY=0.8" in content
+
+    def test_cli_pdf_quality_invalid_exits(self, tmp_path, monkeypatch):
+        import sys
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## Slide\n\nBody", encoding="utf-8")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "md2html.py",
+                "--input",
+                str(md_file),
+                "--output",
+                str(out_file),
+                "--pdf-quality",
+                "0.05",
+            ],
+        )
+        with pytest.raises(SystemExit):
+            md2html.main()
 
     def test_missing_input_exits(self, tmp_path, monkeypatch):
         import sys
