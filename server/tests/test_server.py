@@ -116,6 +116,12 @@ class TestSlides:
         assert payload["error"] == "slides.html not found in workspace."
         assert "conversion pipeline" in payload["hint"]
 
+    def test_empty_password_allows_slides_without_cookie(self, monkeypatch):
+        monkeypatch.setattr(server_mod, "PROJECTOR_PASSWORD", "")
+        r = client.get("/")
+        assert r.status_code == 200
+        assert "text/html" in r.headers["content-type"]
+
 
 # ── GET /audience ─────────────────────────────────────────────────────────────
 
@@ -368,6 +374,56 @@ class TestWebSocket:
             msg = ws.receive_json()
             assert msg["type"] == "error"
             assert msg["message"] == "Unauthorized"
+
+    def test_stale_projector_cannot_control_slides_after_handoff(self):
+        """Only the latest register_projector connection may drive the deck."""
+        server_mod.slides_meta = []
+        server_mod.slides_total = 0
+        server_mod.current_slide = 0
+        server_mod.current_reveal = 0
+        meta = {
+            "type": "slides_meta",
+            "slides": [
+                {"title": "S1", "summary": ""},
+                {"title": "S2", "summary": ""},
+                {"title": "S3", "summary": ""},
+            ],
+        }
+        try:
+            with client.websocket_connect("/ws") as first:
+                _register(first, "projector")
+                with client.websocket_connect("/ws") as second:
+                    _register(second, "projector")
+                    second.send_json(meta)
+                    second.send_json({"type": "slide_change", "index": 2, "reveal": 0})
+                    assert server_mod.current_slide == 2
+
+                    first.send_json({"type": "slide_change", "index": 0, "reveal": 0})
+                    assert server_mod.current_slide == 2  # stale tab ignored
+
+                    second.send_json({"type": "slide_change", "index": 1, "reveal": 0})
+                    assert server_mod.current_slide == 1
+        finally:
+            server_mod.slides_meta = []
+            server_mod.slides_total = 0
+            server_mod.current_slide = 0
+            server_mod.current_reveal = 0
+            server_mod.projector_ws = None
+
+    def test_projector_reconnect_replays_like_updates(self):
+        """Reconnecting projector receives existing like counts (S2 replay)."""
+        server_mod.likes = {0: ["Alice🦊", "Bob🐺"]}
+        try:
+            with client.websocket_connect("/ws") as proj:
+                _register(proj, "projector")
+                replay = proj.receive_json()
+                assert replay["type"] == "like_update"
+                assert replay["slide"] == 0
+                assert replay["count"] == 2
+                assert replay["recent"] == ["Alice🦊", "Bob🐺"]
+        finally:
+            server_mod.likes = {}
+            server_mod.projector_ws = None
 
 
 class TestHelpers:

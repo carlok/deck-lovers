@@ -229,7 +229,6 @@ async def websocket_endpoint(ws: WebSocket):
     global current_slide, current_reveal, slides_total, projector_ws, slides_meta
 
     await ws.accept()
-    is_projector = False
     username = generate_username()
     clients[ws] = username
 
@@ -262,7 +261,6 @@ async def websocket_endpoint(ws: WebSocket):
                 if PROJECTOR_SECRET and msg.get("secret") != PROJECTOR_SECRET:
                     await ws.send_text(json.dumps({"type": "error", "message": "Unauthorized"}))
                     continue
-                is_projector = True
                 projector_ws = ws
                 await _broadcast_audience({"type": "projector_status", "connected": True})
                 # Replay all existing like state to reconnected projector (S2 fix)
@@ -275,14 +273,14 @@ async def websocket_endpoint(ws: WebSocket):
                             "recent": like_list[-5:],
                         }))
 
-            elif mtype == "slides_meta" and is_projector:          # C1: projector-only
+            elif mtype == "slides_meta" and ws is projector_ws:      # C1: active projector only
                 incoming = msg.get("slides", [])
                 if incoming:
                     # Merge/replace — safe to re-send on reconnect (S2 fix)
                     slides_meta = incoming
                     slides_total = len(slides_meta)
 
-            elif mtype == "slide_change" and is_projector:
+            elif mtype == "slide_change" and ws is projector_ws:
                 idx = int(msg.get("index", 0))                     # I2: bounds-check
                 current_slide = max(0, min(idx, max(slides_total - 1, 0)))
                 current_reveal = max(0, int(msg.get("reveal", 0)))
@@ -296,7 +294,7 @@ async def websocket_endpoint(ws: WebSocket):
                     "summary": m["summary"],
                 })
 
-            elif mtype == "presentation_state" and is_projector:
+            elif mtype == "presentation_state" and ws is projector_ws:
                 idx = int(msg.get("index", current_slide))
                 current_slide = max(0, min(idx, max(slides_total - 1, 0)))
                 current_reveal = max(0, int(msg.get("reveal", 0)))
@@ -338,7 +336,7 @@ async def websocket_endpoint(ws: WebSocket):
     except WebSocketDisconnect:
         pass
     finally:
-        if is_projector and projector_ws is ws:
+        if projector_ws is ws:
             projector_ws = None
             await _broadcast_audience({"type": "projector_status", "connected": False})
         used_names.discard(clients.pop(ws, ""))
