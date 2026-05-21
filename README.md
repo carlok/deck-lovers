@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/carlok/deck-lovers/actions/workflows/ci.yml"><img src="https://github.com/carlok/deck-lovers/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/carlok/deck-lovers/releases"><img src="https://img.shields.io/github/v/release/carlok/deck-lovers?display_name=tag" alt="Latest release"></a>
+  <a href="https://github.com/carlok/deck-lovers/releases"><img src="https://img.shields.io/github/v/release/carlok/deck-lovers?display_name=tag&color=brightgreen" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
