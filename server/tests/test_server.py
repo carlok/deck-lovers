@@ -314,18 +314,32 @@ class TestWebSocket:
             assert msg["type"] == "slide_update"
 
     def test_slide_change_broadcasts_to_audience(self):
-        with client.websocket_connect("/ws") as proj:
-            _register(proj, "projector")
-            proj.send_json({"type": "slide_change", "index": 1, "reveal": 2})
-            assert server_mod.current_slide == 0  # clamped when slides_total is 0
-            assert server_mod.current_reveal == 2
+        with client.websocket_connect("/ws") as aud:
+            _register(aud, "audience")
+            with client.websocket_connect("/ws") as proj:
+                _register(proj, "projector")
+                _ = aud.receive_json()  # projector_status connected=True
+                proj.send_json({"type": "slide_change", "index": 1, "reveal": 2})
+                msg = aud.receive_json()
+                assert msg["type"] == "slide_update"
+                assert msg["index"] == 0  # clamped when slides_total is 0
+                assert msg["reveal"] == 2
+                assert server_mod.current_slide == 0
+                assert server_mod.current_reveal == 2
 
     def test_presentation_state_broadcasts_to_audience(self):
-        with client.websocket_connect("/ws") as proj:
-            _register(proj, "projector")
-            proj.send_json({"type": "presentation_state", "index": 3, "reveal": 1})
-            assert server_mod.current_slide == 0  # clamped when slides_total is 0
-            assert server_mod.current_reveal == 1
+        with client.websocket_connect("/ws") as aud:
+            _register(aud, "audience")
+            with client.websocket_connect("/ws") as proj:
+                _register(proj, "projector")
+                _ = aud.receive_json()  # projector_status connected=True
+                proj.send_json({"type": "presentation_state", "index": 3, "reveal": 1})
+                msg = aud.receive_json()
+                assert msg["type"] == "slide_update"
+                assert msg["index"] == 0  # clamped when slides_total is 0
+                assert msg["reveal"] == 1
+                assert server_mod.current_slide == 0
+                assert server_mod.current_reveal == 1
 
     def test_slides_meta_updates_total_for_new_clients(self):
         with client.websocket_connect("/ws") as proj:
