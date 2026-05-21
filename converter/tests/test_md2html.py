@@ -185,6 +185,14 @@ class TestBuildHtml:
         assert 'id="qr-overlay"' not in html
         assert "var SHOW_QR=false;" in html
 
+    def test_likes_toggle_off_removes_projector_sidebar(self):
+        html = md2html.build_html(self.SLIDES, doc_title="Deck", show_likes=False)
+        assert 'id="like-sidebar"' not in html
+        assert 'id="sidebar-toggle"' not in html
+        assert "var SHOW_LIKES=false;" in html
+        assert "function onLikeUpdate" in html
+        assert "likesData[msg.slide]=msg.count" in html
+
     def test_landscape_print_css(self):
         html = self._html()
         # PDF generated via html2canvas + jsPDF at 4K (3840x2160) from 1280x720*3 capture
@@ -261,6 +269,10 @@ class TestEnvTokens:
     """AUDIENCE_URL is still baked in (QR code). WS_URL is now dynamic JS.
     Patch AUDIENCE_URL directly with monkeypatch.setattr."""
 
+    def test_apply_endpoint_config_port(self):
+        md2html.apply_endpoint_config(server_host="10.0.0.1", port="9000", ws_scheme="ws")
+        assert md2html.AUDIENCE_URL == "http://10.0.0.1:9000/audience"
+
     def test_custom_host(self, monkeypatch):
         monkeypatch.setattr(md2html, "AUDIENCE_URL", "http://192.168.1.99:8000/audience")
         html = md2html.build_html(["## S\n\nBody"], doc_title="T")
@@ -299,6 +311,30 @@ class TestMain:
         content = out_file.read_text(encoding="utf-8")
         assert "<!DOCTYPE html>" in content
         assert "Slide" in content
+
+    def test_cli_port_baked_into_audience_url(self, tmp_path, monkeypatch):
+        import sys
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## Slide\n\nBody", encoding="utf-8")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "md2html.py",
+                "--input",
+                str(md_file),
+                "--output",
+                str(out_file),
+                "--server-host",
+                "192.168.0.50",
+                "--port",
+                "9000",
+            ],
+        )
+        md2html.main()
+        content = out_file.read_text(encoding="utf-8")
+        assert "http://192.168.0.50:9000/audience" in content
 
     def test_cli_line_reveal_on(self, tmp_path, monkeypatch):
         import sys
@@ -366,6 +402,29 @@ class TestMain:
         md2html.main()
         content = out_file.read_text(encoding="utf-8")
         assert 'id="stats-slide"' not in content
+
+    def test_cli_likes_off(self, tmp_path, monkeypatch):
+        import sys
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## Slide\n\nBody", encoding="utf-8")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "md2html.py",
+                "--input",
+                str(md_file),
+                "--output",
+                str(out_file),
+                "--likes",
+                "off",
+            ],
+        )
+        md2html.main()
+        content = out_file.read_text(encoding="utf-8")
+        assert 'id="like-sidebar"' not in content
+        assert "var SHOW_LIKES=false;" in content
 
     def test_cli_pdf_quality(self, tmp_path, monkeypatch):
         import sys

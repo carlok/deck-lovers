@@ -10,8 +10,11 @@
 #   ./deploy.sh --line-reveal            # arrows reveal lines before changing slide
 #   ./deploy.sh --no-qr                  # hide audience QR overlay in projector HTML
 #   ./deploy.sh --no-stats               # remove final audience scoring slide
+#   ./deploy.sh --no-likes               # hide projector likes UI/effects
 #   ./deploy.sh --pdf-quality 0.82       # smaller PDF / JPEG compression (default 0.92)
+#   ./deploy.sh --port 9000              # host port (default 8000); same as PORT=9000
 #   ./deploy.sh --qr off                 # same as --no-qr (general form)
+#   ./deploy.sh --likes off              # same as --no-likes (projector-side only)
 #   ./deploy.sh --cloudflare <url>       # rebake Cloudflare tunnel URL into QR code
 #
 # REMOTE (Hetzner or any SSH host):
@@ -22,7 +25,7 @@
 # ENV VARS:
 #   VPS          user@host  — if set, deploy to remote host
 #   VPS_PORT     SSH port (default 22)
-#   PORT         app port (default 8000)
+#   PORT         app host port (default 8000); overridden by --port
 #   COMPOSE      override compose runtime (default: auto-detect)
 #   SERVER_HOST  override hostname baked into QR code (remote: auto-sslip.io)
 #   WS_SCHEME    ws or wss (remote: auto wss; local --https: auto wss)
@@ -46,7 +49,9 @@ SLIDES_FILE="" # --slides-file <path>  e.g. tmp/presentation_from_tex.md
 LINE_REVEAL="off" # --line-reveal
 SHOW_QR="on" # --qr on|off or --no-qr
 SHOW_STATS="on" # --stats on|off or --no-stats
+SHOW_LIKES="on" # --likes on|off or --no-likes (projector UI/effects only)
 PDF_QUALITY="${PDF_QUALITY:-0.92}" # --pdf-quality <0.5–1> or PDF_QUALITY env
+PORT=${PORT:-8000}                 # --port <n> or PORT env
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -63,12 +68,18 @@ while [[ $# -gt 0 ]]; do
       SHOW_QR="off"; shift ;;
     --no-stats)
       SHOW_STATS="off"; shift ;;
+    --no-likes)
+      SHOW_LIKES="off"; shift ;;
     --qr)
       SHOW_QR="${2:?'--qr requires on|off'}"; shift 2 ;;
     --stats)
       SHOW_STATS="${2:?'--stats requires on|off'}"; shift 2 ;;
+    --likes)
+      SHOW_LIKES="${2:?'--likes requires on|off'}"; shift 2 ;;
     --pdf-quality)
       PDF_QUALITY="${2:?'--pdf-quality requires a number 0.5–1 (e.g. 0.85)'}"; shift 2 ;;
+    --port)
+      PORT="${2:?'--port requires a port number (e.g. 9000)'}"; shift 2 ;;
     --cloudflare)
       CF_URL="${2:?'--cloudflare requires a URL argument'}";  shift 2 ;;
     *) shift ;;
@@ -83,6 +94,17 @@ if [[ "$SHOW_STATS" != "on" && "$SHOW_STATS" != "off" ]]; then
   echo "ERROR: --stats accepts only 'on' or 'off'" >&2
   exit 1
 fi
+if [[ "$SHOW_LIKES" != "on" && "$SHOW_LIKES" != "off" ]]; then
+  echo "ERROR: --likes accepts only 'on' or 'off'" >&2
+  exit 1
+fi
+if ! [[ "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+  echo "ERROR: --port / PORT must be an integer from 1 to 65535 (got: $PORT)" >&2
+  exit 1
+fi
+
+# Compose substitutes ${PORT} from the process environment (must be exported).
+export PORT
 
 # --cloudflare: reconvert with public host baked in, don't restart the server
 if [[ -n "$CF_URL" ]]; then
@@ -96,7 +118,6 @@ if [[ -n "$CF_URL" ]]; then
   echo
 fi
 
-PORT=${PORT:-8000}
 VPS_SSH_PORT=${VPS_PORT:-22}
 VPS=${VPS:-}
 WS_SCHEME=${WS_SCHEME:-ws}
@@ -170,6 +191,7 @@ printf "│  port    : %-30s│\n" "$PORT"
 printf "│  reveals : %-30s│\n" "$LINE_REVEAL"
 printf "│  qr      : %-30s│\n" "$SHOW_QR"
 printf "│  stats   : %-30s│\n" "$SHOW_STATS"
+printf "│  likes   : %-30s│\n" "$SHOW_LIKES"
 printf "│  pdf-q   : %-30s│\n" "$PDF_QUALITY"
 printf "│  pdf     : %-30s│\n" "$PDF_ONLY"
 [[ "$MODE" == "remote" ]] && printf "│  vps     : %-30s│\n" "$VPS"
@@ -227,14 +249,18 @@ _convert() {
   # Remove any stale file — previous runs may have left it with a different owner
   # (e.g. appuser/UID-1000 from an old image) that the current container can't overwrite.
   rm -f output/slides.html
-  SERVER_HOST="$host" PORT="$PORT" WS_SCHEME="$WS_SCHEME" LINE_REVEAL="$LINE_REVEAL" SHOW_QR="$SHOW_QR" \
-    $COMPOSE run --rm --remove-orphans md2html \
+  export SERVER_HOST="$host" WS_SCHEME LINE_REVEAL SHOW_QR SHOW_LIKES
+  $COMPOSE run --rm --remove-orphans md2html \
       python md2html.py \
       --input /workspace/slides.md \
       --output /workspace/slides.html \
+      --server-host "$host" \
+      --port "$PORT" \
+      --ws-scheme "$WS_SCHEME" \
       --line-reveal "$LINE_REVEAL" \
       --qr "$SHOW_QR" \
       --stats "$SHOW_STATS" \
+      --likes "$SHOW_LIKES" \
       --pdf-quality "$PDF_QUALITY" \
       --title "Presentation"
   echo "  ✓ output/slides.html ready"
@@ -387,7 +413,13 @@ else
   fi
 
   if $SERVE; then
+    if ! $CONVERT; then
+      echo "NOTE: --serve-only skips md2html — QR/URLs in output/slides.html still reflect the port used at last convert." >&2
+      echo "      Re-run without --serve-only (or --convert-only) after changing --port." >&2
+      echo
+    fi
     _endpoints "$HOST" true
+    export SERVER_HOST="$HOST" WS_SCHEME
     if [[ "$WS_SCHEME" == "wss" ]]; then
       $COMPOSE --profile tls up caddy server   # local --https mode
     else

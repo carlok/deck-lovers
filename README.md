@@ -26,9 +26,11 @@ cp .env.example .env
 ./deploy.sh
 ```
 
-Then open:
+Then open (default port **8000**):
 - Projector: `http://<LAN-IP>:8000`
 - Audience: `http://<LAN-IP>:8000/audience`
+
+Use another host port with `./deploy.sh --port 9000` or `PORT=9000 ./deploy.sh` (see [Other flags](#other-flags)).
 
 Host remains clean:
 - no host `npm install`
@@ -146,9 +148,9 @@ Best for trusted LAN / in-person use. No certs, no port-forwarding.
 1. Uses `podman compose`
 2. Detects your WiFi IP (macOS `en0`/`en1`, Linux `ip addr`) — bakes it into the QR code
 3. Converts `slides.md` → `output/slides.html`
-4. Starts the server at `http://<LAN-IP>:8000`
+4. Starts the server at `http://<LAN-IP>:<PORT>` (default port `8000`)
 
-Audience scan the QR code and open `http://<LAN-IP>:8000/audience` on their phones.
+Audience scan the QR code and open `http://<LAN-IP>:<PORT>/audience` on their phones.
 
 ---
 
@@ -212,11 +214,26 @@ Caddy obtains the cert and audience URL becomes `https://1-2-3-4.sslip.io/audien
 # Disable final audience scoring slide in generated deck/PDF
 ./deploy.sh --no-stats
 
+# Hide projector-side likes UI and heart animations while still accepting audience likes
+./deploy.sh --no-likes
+
 # General form (same result)
 ./deploy.sh --qr off
 
 # General form (same result)
 ./deploy.sh --stats off
+
+# General form (same result)
+./deploy.sh --likes off
+
+# Custom app port on the host (container still listens on 8000 internally).
+# Port is passed to md2html (--port) so the audience QR matches; re-convert after changing port.
+./deploy.sh --port 9000
+# Same via env (useful in scripts):
+PORT=9000 ./deploy.sh
+# Serve-only does not re-run md2html — convert again if you changed port since last build.
+# If using Cloudflare tunnel, point it at the same port:
+#   cloudflared tunnel --url http://localhost:9000
 
 # Override runtime or hostname
 COMPOSE="podman compose" SERVER_HOST=192.168.0.106 ./deploy.sh
@@ -467,14 +484,16 @@ cp .env.example .env
 pip install -r converter/requirements.txt
 pip install -r server/requirements.txt
 
-# Convert
+# Convert (port/host baked into audience QR — use --port or PORT env)
 mkdir -p output && cp slides.md output/slides.md
-SERVER_HOST=localhost python converter/md2html.py \
+python converter/md2html.py \
   --input output/slides.md \
   --output output/slides.html \
+  --server-host localhost \
+  --port 8000 \
   --qr off   # optional: hide QR overlay
 
-# Serve
+# Serve (match PORT above)
 WORKSPACE_PATH=./output uvicorn server.server:app --host 0.0.0.0 --port 8000
 ```
 
@@ -527,6 +546,9 @@ systemctl --user enable --now presentation.container
 5. Navigate with ← → arrow keys
 6. Watch likes sidebar on the right
 7. Navigate to last slide for the engagement bar chart
+
+Use `./deploy.sh --no-likes` to hide the projector heart tab/sidebar and floating
+heart animations while still allowing the audience page to send likes.
 
 ---
 

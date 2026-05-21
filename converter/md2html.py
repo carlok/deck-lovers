@@ -26,15 +26,36 @@ except ImportError:
 SERVER_HOST = os.getenv("SERVER_HOST", "localhost")
 PORT        = os.getenv("PORT", "8000")
 WS_SCHEME   = os.getenv("WS_SCHEME", "ws")   # set to "wss" behind TLS
+HTTP_SCHEME = "http"
+WS_URL      = ""
+AUDIENCE_URL = ""
 
-# Behind a TLS proxy (Caddy/Cloudflare) the public port is always 443 — omit it.
-# For plain HTTP omit only if PORT is the default 80.
-_port = "" if WS_SCHEME == "wss" else ("" if PORT == "80" else f":{PORT}")
-HTTP_SCHEME = "https" if WS_SCHEME == "wss" else "http"
-WS_URL      = f"{WS_SCHEME}://{SERVER_HOST}{_port}/ws"
-AUDIENCE_URL = f"{HTTP_SCHEME}://{SERVER_HOST}{_port}/audience"
 LINE_REVEAL_ENV = os.getenv("LINE_REVEAL", "0").strip().lower() in {"1", "true", "yes", "on"}
 SHOW_QR_ENV = os.getenv("SHOW_QR", "1").strip().lower() in {"1", "true", "yes", "on"}
+SHOW_LIKES_ENV = os.getenv("SHOW_LIKES", "1").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def apply_endpoint_config(
+    server_host: str | None = None,
+    port: str | None = None,
+    ws_scheme: str | None = None,
+) -> None:
+    """Set module-level host/port URLs (env defaults, overridden by CLI in main())."""
+    global SERVER_HOST, PORT, WS_SCHEME, HTTP_SCHEME, WS_URL, AUDIENCE_URL
+
+    SERVER_HOST = (server_host if server_host is not None else os.getenv("SERVER_HOST", "localhost")).strip()
+    PORT = str(port if port is not None else os.getenv("PORT", "8000")).strip()
+    WS_SCHEME = (ws_scheme if ws_scheme is not None else os.getenv("WS_SCHEME", "ws")).strip()
+
+    # Behind a TLS proxy (Caddy/Cloudflare) the public port is always 443 — omit it.
+    # For plain HTTP omit only if PORT is the default 80.
+    port_part = "" if WS_SCHEME == "wss" else ("" if PORT == "80" else f":{PORT}")
+    HTTP_SCHEME = "https" if WS_SCHEME == "wss" else "http"
+    WS_URL = f"{WS_SCHEME}://{SERVER_HOST}{port_part}/ws"
+    AUDIENCE_URL = f"{HTTP_SCHEME}://{SERVER_HOST}{port_part}/audience"
+
+
+apply_endpoint_config()
 
 # ── YouTube ───────────────────────────────────────────────────────────────────
 
@@ -391,6 +412,7 @@ var AUDIENCE_URL='__AUDIENCE_URL__';
 var TOTAL=__TOTAL__;
 var LINE_REVEAL=__LINE_REVEAL__;
 var SHOW_QR=__SHOW_QR__;
+var SHOW_LIKES=__SHOW_LIKES__;
 var PDF_JPEG_QUALITY=__PDF_JPEG_QUALITY__;
 var MIRROR=location.hash==='#mirror';
 var PRINT=location.hash==='#print';
@@ -513,9 +535,12 @@ if(SHOW_QR){
 
 // Sidebar
 var sidebarContent=document.getElementById('sidebar-content');
-document.getElementById('sidebar-toggle').addEventListener('click',function(){
-  sidebarContent.classList.toggle('hidden');
-});
+var sidebarToggle=document.getElementById('sidebar-toggle');
+if(sidebarToggle&&sidebarContent){
+  sidebarToggle.addEventListener('click',function(){
+    sidebarContent.classList.toggle('hidden');
+  });
+}
 
 function updateSidebar(idx){
   var el=document.getElementById('like-count');
@@ -583,7 +608,7 @@ function renderStats(){
 // Like update handler
 function onLikeUpdate(msg){
   likesData[msg.slide]=msg.count;
-  scheduleHearts(5);  // burst of 5 hearts per tap (audience sends 1 like per tap)
+  if(SHOW_LIKES) scheduleHearts(5);  // projector-side burst only; likes still count
   if(msg.slide===current){
     var el=document.getElementById('like-count');
     if(el){el.textContent=msg.count;el.classList.remove('pulse');void el.offsetWidth;el.classList.add('pulse');}
@@ -758,6 +783,7 @@ def build_html(
     doc_title: str = "Presentation",
     line_reveal: bool = False,
     show_qr: bool = True,
+    show_likes: bool = True,
     include_stats: bool = True,
     pdf_jpeg_quality: float = 0.92,
 ) -> str:
@@ -794,6 +820,7 @@ def build_html(
         .replace("__TOTAL__", str(total))
         .replace("__LINE_REVEAL__", "true" if line_reveal else "false")
         .replace("__SHOW_QR__", "true" if show_qr else "false")
+        .replace("__SHOW_LIKES__", "true" if show_likes else "false")
         .replace("__PDF_JPEG_QUALITY__", json.dumps(q))
     )
 
@@ -803,6 +830,14 @@ def build_html(
   <div id="qrcode"></div>
   <div id="qr-label">scan to join</div>
 </div>""" if show_qr else ""
+    like_sidebar = """<div id="like-sidebar">
+  <button id="sidebar-toggle" aria-label="Toggle likes">&#9829;</button>
+  <div id="sidebar-content" class="hidden">
+    <div id="like-count">0</div>
+    <div id="like-sub">likes this slide</div>
+    <div id="like-feed"></div>
+  </div>
+</div>""" if show_likes else ""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -833,14 +868,7 @@ def build_html(
 
 {qr_overlay}
 
-<div id="like-sidebar">
-  <button id="sidebar-toggle" aria-label="Toggle likes">&#9829;</button>
-  <div id="sidebar-content" class="hidden">
-    <div id="like-count">0</div>
-    <div id="like-sub">likes this slide</div>
-    <div id="like-feed"></div>
-  </div>
-</div>
+{like_sidebar}
 
 <div id="reconnect" hidden>&#9711; Reconnecting&hellip;</div>
 
@@ -863,6 +891,22 @@ def main() -> None:
     p.add_argument("--output", required=True, help="Path to output slides.html")
     p.add_argument("--title",  default="Presentation", help="Document <title>")
     p.add_argument(
+        "--server-host",
+        default=os.getenv("SERVER_HOST", "localhost"),
+        help="Hostname baked into audience QR / URLs (default: SERVER_HOST env or localhost).",
+    )
+    p.add_argument(
+        "--port",
+        default=os.getenv("PORT", "8000"),
+        help="TCP port baked into audience QR / URLs (default: PORT env or 8000).",
+    )
+    p.add_argument(
+        "--ws-scheme",
+        choices=["ws", "wss"],
+        default=os.getenv("WS_SCHEME", "ws"),
+        help="WebSocket scheme for baked URLs (default: WS_SCHEME env or ws).",
+    )
+    p.add_argument(
         "--line-reveal",
         choices=["on", "off"],
         default="on" if LINE_REVEAL_ENV else "off",
@@ -881,6 +925,12 @@ def main() -> None:
         help="Append final audience engagement stats slide.",
     )
     p.add_argument(
+        "--likes",
+        choices=["on", "off"],
+        default="on" if SHOW_LIKES_ENV else "off",
+        help="Show projector-side likes UI and heart effects; audience can still send likes when off.",
+    )
+    p.add_argument(
         "--pdf-quality",
         type=float,
         default=0.92,
@@ -888,6 +938,12 @@ def main() -> None:
         help="JPEG quality (0.5–1) for #print / server PDF export — lower = smaller PDF (default: 0.92).",
     )
     args = p.parse_args()
+
+    apply_endpoint_config(
+        server_host=args.server_host,
+        port=args.port,
+        ws_scheme=args.ws_scheme,
+    )
 
     try:
         with open(args.input, encoding="utf-8") as f:   # M1: context manager
@@ -920,6 +976,7 @@ def main() -> None:
         doc_title=args.title,
         line_reveal=(args.line_reveal == "on"),
         show_qr=(args.qr == "on"),
+        show_likes=(args.likes == "on"),
         include_stats=(args.stats == "on"),
         pdf_jpeg_quality=args.pdf_quality,
     )
