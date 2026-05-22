@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 import pathlib
+import time
 import pytest
 
 # ── test workspace: create a fake slides.html before importing the app ────────
@@ -27,6 +28,15 @@ from server import app, PROJECTOR_PASSWORD
 
 client = TestClient(app)
 _AUTH = {"proj_auth": PROJECTOR_PASSWORD}  # cookie used by projector-page tests
+
+
+def _wait_for(predicate, timeout=1.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return predicate()
 
 
 # ── /health ───────────────────────────────────────────────────────────────────
@@ -300,6 +310,39 @@ class TestWebSocket:
             msg = ws.receive_json()
             assert msg["type"] == "slide_update"
 
+    def test_malformed_numeric_fields_do_not_close_connection(self):
+        """Bad numeric payloads should fall back instead of crashing the endpoint."""
+        server_mod.slides_meta = [{"title": "S1", "summary": ""}, {"title": "S2", "summary": ""}]
+        server_mod.slides_total = 2
+        server_mod.current_slide = 1
+        server_mod.current_reveal = 0
+        server_mod.likes = {}
+        try:
+            with client.websocket_connect("/ws") as aud:
+                _register(aud, "audience")
+                with client.websocket_connect("/ws") as proj:
+                    _register(proj, "projector")
+                    _ = aud.receive_json()  # projector_status connected=True
+
+                    proj.send_json({"type": "slide_change", "index": "bad", "reveal": "also-bad"})
+                    msg = aud.receive_json()
+                    assert msg["type"] == "slide_update"
+                    assert msg["index"] == 0
+                    assert msg["reveal"] == 0
+
+                    aud.send_json({"type": "like", "slide": "bad"})
+                    like_update = proj.receive_json()
+                    assert like_update["type"] == "like_update"
+                    assert like_update["slide"] == 0
+                    assert like_update["count"] == 1
+        finally:
+            server_mod.slides_meta = []
+            server_mod.slides_total = 0
+            server_mod.current_slide = 0
+            server_mod.current_reveal = 0
+            server_mod.likes = {}
+            server_mod.projector_ws = None
+
     def test_generate_username_no_name(self):
         """Every new audience connection gets a unique auto-generated name."""
         with client.websocket_connect("/ws") as ws:
@@ -409,13 +452,16 @@ class TestWebSocket:
                 with client.websocket_connect("/ws") as second:
                     _register(second, "projector")
                     second.send_json(meta)
+                    assert _wait_for(lambda: server_mod.slides_total == 3)
                     second.send_json({"type": "slide_change", "index": 2, "reveal": 0})
+                    assert _wait_for(lambda: server_mod.current_slide == 2)
                     assert server_mod.current_slide == 2
 
                     first.send_json({"type": "slide_change", "index": 0, "reveal": 0})
                     assert server_mod.current_slide == 2  # stale tab ignored
 
                     second.send_json({"type": "slide_change", "index": 1, "reveal": 0})
+                    assert _wait_for(lambda: server_mod.current_slide == 1)
                     assert server_mod.current_slide == 1
         finally:
             server_mod.slides_meta = []

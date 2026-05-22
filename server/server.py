@@ -81,6 +81,13 @@ def _meta(idx: int) -> dict:
     return {"title": "", "summary": ""}
 
 
+def _message_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 async def _broadcast_audience(msg: dict) -> None:
     """Send a message to all non-projector clients."""
     dead: list[WebSocket] = []
@@ -281,9 +288,9 @@ async def websocket_endpoint(ws: WebSocket):
                     slides_total = len(slides_meta)
 
             elif mtype == "slide_change" and ws is projector_ws:
-                idx = int(msg.get("index", 0))                     # I2: bounds-check
+                idx = _message_int(msg.get("index"), 0)            # I2: bounds-check
                 current_slide = max(0, min(idx, max(slides_total - 1, 0)))
-                current_reveal = max(0, int(msg.get("reveal", 0)))
+                current_reveal = max(0, _message_int(msg.get("reveal"), 0))
                 m = _meta(current_slide)
                 await _broadcast_audience({
                     "type": "slide_update",
@@ -295,9 +302,9 @@ async def websocket_endpoint(ws: WebSocket):
                 })
 
             elif mtype == "presentation_state" and ws is projector_ws:
-                idx = int(msg.get("index", current_slide))
+                idx = _message_int(msg.get("index"), current_slide)
                 current_slide = max(0, min(idx, max(slides_total - 1, 0)))
-                current_reveal = max(0, int(msg.get("reveal", 0)))
+                current_reveal = max(0, _message_int(msg.get("reveal"), 0))
                 m = _meta(current_slide)
                 await _broadcast_audience({
                     "type": "slide_update",
@@ -309,7 +316,7 @@ async def websocket_endpoint(ws: WebSocket):
                 })
 
             elif mtype == "like":
-                slide_idx = int(msg.get("slide", current_slide))
+                slide_idx = _message_int(msg.get("slide"), current_slide)
                 user = username                                     # I1: ignore spoofable client field
                 bucket = likes.setdefault(slide_idx, [])
                 if len(bucket) < LIKES_CAP:  # C3 fix: cap at 1000
