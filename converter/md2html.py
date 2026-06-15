@@ -223,6 +223,25 @@ def extract_front_matter(raw: str) -> tuple[dict[str, object], str]:
     return branding, raw[match.end():]
 
 
+_PDF_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.pdf$", re.IGNORECASE)
+
+
+def parse_pdf_name(value: str | None) -> str:
+    """Normalize and validate the PDF output basename (raster download + compose export)."""
+    raw = (value if value is not None else os.getenv("PDF_NAME") or "slides.pdf").strip()
+    name = Path(raw.replace("\\", "/")).name
+    if not name or name in {".", ".."} or ".." in name:
+        raise ValueError(f"invalid pdf name: {raw!r}")
+    if not name.lower().endswith(".pdf"):
+        name = f"{name}.pdf"
+    if not _PDF_NAME_RE.match(name):
+        raise ValueError(
+            "pdf name must be a safe filename ending in .pdf "
+            "(letters, digits, dots, dashes, underscores)"
+        )
+    return name
+
+
 def parse_slides(raw: str) -> list[str]:
     raw = raw.replace("\r\n", "\n").replace("\r", "\n")
     parts = re.split(r'\n[ \t]*---[ \t]*\n', raw)
@@ -557,6 +576,7 @@ var SHOW_QR=__SHOW_QR__;
 var SHOW_LIKES=__SHOW_LIKES__;
 var PDF_JPEG_QUALITY=__PDF_JPEG_QUALITY__;
 var PDF_MODE='__PDF_MODE__';
+var PDF_OUTPUT_NAME=__PDF_OUTPUT_NAME__;
 var MIRROR=location.hash==='#mirror';
 var PRINT=location.hash==='#print';
 var current=0;
@@ -853,7 +873,7 @@ if(PRINT){
         function capture(){
           if(i>=slides.length){
             if(st)st.textContent='Saving\u2026';
-            pdf.save('slides.pdf');
+            pdf.save(PDF_OUTPUT_NAME);
             _ov.remove();
             return;
           }
@@ -958,6 +978,7 @@ def build_html(
     include_stats: bool = True,
     pdf_jpeg_quality: float = 0.92,
     pdf_mode: str = "vector",
+    pdf_output_name: str = "slides.pdf",
     palette: dict[str, str] | None = None,
     font_family: str | None = None,
     emoji_mode: TwemojiFormat | None = None,
@@ -1037,6 +1058,8 @@ def build_html(
     if mode not in {"vector", "raster"}:
         raise ValueError("pdf_mode must be 'vector' or 'raster'")
 
+    pdf_name = parse_pdf_name(pdf_output_name)
+
     colors = palette if palette is not None else load_palette(None)
     css = _CSS.replace("__ROOT_CSS__", build_root_css(colors, font_family, active_branding))
     accent = colors["accent"]
@@ -1051,6 +1074,7 @@ def build_html(
         .replace("__SHOW_LIKES__", "true" if show_likes else "false")
         .replace("__PDF_JPEG_QUALITY__", json.dumps(q))
         .replace("__PDF_MODE__", mode)
+        .replace("__PDF_OUTPUT_NAME__", json.dumps(pdf_name))
     )
 
     escaped_title = _esc.escape(doc_title)
@@ -1182,6 +1206,12 @@ def main() -> None:
         help="PDF export mode: vector (text + links, default) or raster (JPEG screenshots).",
     )
     p.add_argument(
+        "--pdf-name",
+        default=os.getenv("PDF_NAME", "slides.pdf"),
+        metavar="FILE",
+        help="Output PDF basename for server-side export (default: slides.pdf).",
+    )
+    p.add_argument(
         "--font",
         default=os.getenv("FONT", ""),
         metavar="NAME",
@@ -1237,6 +1267,12 @@ def main() -> None:
         emoji_mode = parse_emoji_mode(args.emoji or None)
     except ValueError as exc:
         print(f"ERROR: emoji: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        pdf_output_name = parse_pdf_name(args.pdf_name)
+    except ValueError as exc:
+        print(f"ERROR: pdf name: {exc}", file=sys.stderr)
         sys.exit(1)
 
     try:
@@ -1314,6 +1350,7 @@ def main() -> None:
         include_stats=(args.stats == "on"),
         pdf_jpeg_quality=args.pdf_quality,
         pdf_mode=args.pdf_mode,
+        pdf_output_name=pdf_output_name,
         palette=palette,
         font_family=font_family,
         emoji_mode=emoji_mode,

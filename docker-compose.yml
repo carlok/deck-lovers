@@ -42,6 +42,7 @@ services:
       - LOGO=${LOGO:-}
       - FRAME=${FRAME:-}
       - LOGO_ON=${LOGO_ON:-}
+      - PDF_NAME=${PDF_NAME:-slides.pdf}
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     profiles: ["convert"]
@@ -57,9 +58,10 @@ services:
       - ./converter/export_pdf.mjs:/app/export_pdf.mjs:ro
     environment:
       - PDF_MODE=${PDF_MODE:-vector}
+      - PDF_NAME=${PDF_NAME:-slides.pdf}
     command:
       - /workspace/slides.html
-      - /workspace/slides.pdf
+      - /workspace/${PDF_NAME:-slides.pdf}
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     profiles: ["convert"]

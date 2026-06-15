@@ -195,6 +195,7 @@ Caddy obtains the cert and audience URL becomes `https://1-2-3-4.sslip.io/audien
 
 # Convert + server-side PDF export only (no server start)
 ./deploy.sh --pdf-only
+./deploy.sh --pdf-only --pdf-name deck.pdf   # → output/deck.pdf
 
 # Server only (skip conversion)
 ./deploy.sh --serve-only
@@ -244,6 +245,10 @@ PALETTE=default ./deploy.sh --convert-only
 ./deploy.sh --pdf-only --pdf-mode vector
 PDF_MODE=vector ./deploy.sh --pdf-only
 
+# Custom output PDF basename (default: slides.pdf → output/slides.pdf)
+./deploy.sh --pdf-only --pdf-name deck.pdf
+PDF_NAME=deck.pdf ./deploy.sh --pdf-only
+
 # Slide font via Google Fonts (omit for system UI stack)
 ./deploy.sh --font Montserrat
 
@@ -254,7 +259,7 @@ FONT="Open Sans" ./deploy.sh --convert-only
 # Branded deck: accent bars + corner logo (from palette JSON; see § Extending)
 cp img/OctopusLab-Colored-NoPayoff.png output/img/   # once per machine
 ./deploy.sh --pdf-only --slides-file tmp/ol-cd-2.md --no-qr --no-stats \
-  --palette octopuslab --font Montserrat --emoji twemoji
+  --palette octopuslab --font Montserrat --emoji twemoji --pdf-name ol-cd-2.pdf
 # Override logo path or visibility without editing the palette:
 ./deploy.sh --palette octopuslab --logo img/custom.png --logo-on content_not_last
 FRAME=off ./deploy.sh --convert-only --palette octopuslab   # bars off, logo unchanged
@@ -266,10 +271,12 @@ COMPOSE="podman compose" SERVER_HOST=192.168.0.106 ./deploy.sh
 VPS_PORT=2222 VPS=root@YOUR_SERVER_IP ./deploy.sh
 
 # PDF only: custom deck, palette, font, sharp emoji — no QR, no stats slide
-./deploy.sh --pdf-only --slides-file tmp/example.md --no-qr --no-stats --palette octopuslab --font Montserrat --emoji twemoji
+./deploy.sh --pdf-only --slides-file tmp/example.md --no-qr --no-stats \
+  --palette octopuslab --font Montserrat --emoji twemoji --pdf-name example.pdf
 
 # Smaller raster PDF (JPEG quality; default export is vector text + links).
-./deploy.sh --pdf-only --slides-file tmp/deck.md --no-qr --no-stats --pdf-mode raster --pdf-quality 0.82
+./deploy.sh --pdf-only --slides-file tmp/deck.md --no-qr --no-stats \
+  --pdf-mode raster --pdf-quality 0.82 --pdf-name deck.pdf
 # Same via env:  PDF_QUALITY=0.85 PDF_MODE=raster ./deploy.sh --pdf-only …
 ```
 
@@ -318,17 +325,17 @@ output/
 ├── slides.md          ← intermediate Markdown (editable)
 ├── img/               ← slide image assets (referenced from Markdown)
 └── slides.html        ← final standalone deck (open directly in browser)
-└── slides.pdf         ← server-side generated PDF (`--pdf-only`)
+└── slides.pdf         ← server-side generated PDF (`--pdf-only`; rename with `--pdf-name`)
 ```
 
-PDF export uses **Chromium vector print** by default: selectable text and clickable links, one 16:9 slide per page. Use `--pdf-mode raster` for the legacy JPEG-screenshot path (supports `--pdf-quality`).
+PDF export uses **Chromium vector print** by default: selectable text and clickable links, one 16:9 slide per page. Use `--pdf-mode raster` for the legacy JPEG-screenshot path (supports `--pdf-quality`). Use `--pdf-name my-deck.pdf` (or `PDF_NAME=my-deck.pdf`) to write a different basename under `output/`.
 
 | Mode | Command | Output |
 |------|---------|--------|
-| **vector** (default) | `./deploy.sh --pdf-only` | Text, links, smaller files |
+| **vector** (default) | `./deploy.sh --pdf-only` | `output/slides.pdf` (or `--pdf-name`) |
 | raster | `./deploy.sh --pdf-only --pdf-mode raster --pdf-quality 0.82` | Flat JPEG pages per slide |
 
-Set `PDF_MODE=vector` or `PDF_MODE=raster` in `.env` to change the default for `deploy.sh` and the `pdf` container.
+Set `PDF_MODE=vector` or `PDF_MODE=raster` in `.env` to change the default for `deploy.sh` and the `pdf` container. Set `PDF_NAME=deck.pdf` to change the default output basename.
 
 `slides.html` is fully self-contained — open it with `file://` for offline use,
 or serve it via the FastAPI server for live audience features.
@@ -370,10 +377,10 @@ All test suites run in containers and write coverage reports to `test-results/`.
 ./run_tests.sh js
 ```
 
-**Converter suite** (as of last run): **118 tests**, **~92% line coverage** on `md2html`, `palette`, and `emoji_img`. Branding is covered by:
+**Converter suite** (as of last run): **124 tests**, **~92% line coverage** on `md2html`, `palette`, and `emoji_img`. Branding and PDF export naming are covered by:
 
 - `converter/tests/test_palette.py` — `load_branding`, `merge_branding`, CSS vars, validation
-- `converter/tests/test_md2html.py` — chrome HTML, `logo_on` modes, front matter, CLI `--logo` / `--no-frame` / `--logo-on`
+- `converter/tests/test_md2html.py` — chrome HTML, `logo_on` modes, front matter, CLI `--logo` / `--no-frame` / `--logo-on`, `--pdf-name` / `parse_pdf_name`
 - `converter/tests/fixtures/branded-palette.json` — palette fixture used in tests
 
 Equivalent `podman compose` commands (profile `test`):
@@ -392,7 +399,7 @@ Coverage output folders:
 - `test-results/converter-js`
 - `test-results/server-js`
 
-Re-run `./run_tests.sh converter` after changing palette branding or slide chrome CSS.
+Re-run `./run_tests.sh converter` after changing palette branding, slide chrome CSS, or PDF export flags (`--pdf-name`, `--pdf-mode`).
 
 ---
 
@@ -537,6 +544,7 @@ python converter/md2html.py \
   --palette palettes/default.json \
   --font Montserrat \
   --pdf-mode vector \
+  --pdf-name deck.pdf \
   --qr off   # optional: hide QR overlay
 
 # Serve (match PORT above)
@@ -725,7 +733,7 @@ LOGO_ON=content_not_last LOGO=img/logo.svg ./deploy.sh --convert-only --palette 
 mkdir -p output/img
 cp path/to/OctopusLab-Colored-NoPayoff.png output/img/
 ./deploy.sh --pdf-only --slides-file tmp/ol-cd-2.md --no-qr --no-stats \
-  --palette octopuslab --font Montserrat --emoji twemoji
+  --palette octopuslab --font Montserrat --emoji twemoji --pdf-name ol-cd-2.pdf
 ```
 
 Place logo files under `output/img/` before convert/PDF (paths are resolved from `output/slides.html`). Set `logo_height` in the palette (e.g. `"40px"`) to control corner logo size; the logo is pinned top-right and does not use the full-slide image layout.
@@ -748,7 +756,8 @@ Unicode emoji in headings (e.g. `# 🧵 CottonIA`) use the OS **color emoji font
 **Option A — Twemoji (automatic):** replace every emoji in the deck with CDN SVG images that scale with the text:
 
 ```bash
-./deploy.sh --pdf-only --slides-file tmp/example.md --no-qr --no-stats --palette octopuslab --font Montserrat --emoji twemoji
+./deploy.sh --pdf-only --slides-file tmp/example.md --no-qr --no-stats \
+  --palette octopuslab --font Montserrat --emoji twemoji --pdf-name example.pdf
 EMOJI=twemoji ./deploy.sh --convert-only --slides-file tmp/deck.md
 ```
 

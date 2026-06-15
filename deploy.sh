@@ -13,6 +13,7 @@
 #   ./deploy.sh --no-likes               # hide projector likes UI/effects
 #   ./deploy.sh --pdf-quality 0.82       # raster mode only — JPEG compression
 #   ./deploy.sh --pdf-mode raster        # JPEG screenshots (legacy); default is vector
+#   ./deploy.sh --pdf-name deck.pdf      # output PDF basename; PDF_NAME=… env
 #   ./deploy.sh --port 9000              # host port (default 8000); same as PORT=9000
 #   ./deploy.sh --palette octopuslab     # JSON palette (name or path); PALETTE=… env
 #   ./deploy.sh --font Montserrat        # Google Font for slides; FONT=… env
@@ -39,6 +40,7 @@
 #   FRAME        set to off to disable top/bottom accent bars (--no-frame)
 #   LOGO_ON      all | title | content | none | content_not_last
 #   PDF_MODE     vector (default) or raster for PDF export
+#   PDF_NAME     output PDF basename (default slides.pdf); --pdf-name
 #   COMPOSE      override compose runtime (default: auto-detect)
 #   SERVER_HOST  override hostname baked into QR code (remote: auto-sslip.io)
 #   WS_SCHEME    ws or wss (remote: auto wss; local --https: auto wss)
@@ -72,6 +74,7 @@ LOGO="${LOGO:-}"                   # --logo <path> or LOGO env (override palette
 FRAME="${FRAME:-}"                 # FRAME=off or --no-frame disables accent bars
 LOGO_ON="${LOGO_ON:-}"             # --logo-on <mode> or LOGO_ON env
 PDF_MODE="${PDF_MODE:-vector}"     # --pdf-mode vector|raster or PDF_MODE env
+PDF_NAME="${PDF_NAME:-slides.pdf}" # --pdf-name <file.pdf> or PDF_NAME env
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -100,6 +103,8 @@ while [[ $# -gt 0 ]]; do
       PDF_QUALITY="${2:?'--pdf-quality requires a number 0.5–1 (e.g. 0.85)'}"; shift 2 ;;
     --pdf-mode)
       PDF_MODE="${2:?'--pdf-mode requires vector or raster'}"; shift 2 ;;
+    --pdf-name)
+      PDF_NAME="${2:?'--pdf-name requires a filename (e.g. deck.pdf)'}"; shift 2 ;;
     --port)
       PORT="${2:?'--port requires a port number (e.g. 9000)'}"; shift 2 ;;
     --palette)
@@ -136,6 +141,21 @@ if [[ "$PDF_MODE" != "vector" && "$PDF_MODE" != "raster" ]]; then
   echo "ERROR: --pdf-mode / PDF_MODE must be 'vector' or 'raster'" >&2
   exit 1
 fi
+PDF_NAME="${PDF_NAME//\\//}"
+PDF_NAME="${PDF_NAME##*/}"
+if [[ -z "$PDF_NAME" || "$PDF_NAME" == *"/"* || "$PDF_NAME" == *".."* ]]; then
+  echo "ERROR: --pdf-name / PDF_NAME must be a safe basename (got: $PDF_NAME)" >&2
+  exit 1
+fi
+if [[ "$PDF_NAME" != *.pdf && "$PDF_NAME" != *.PDF ]]; then
+  PDF_NAME="${PDF_NAME}.pdf"
+fi
+if ! [[ "$PDF_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*\.[Pp][Dd][Ff]$ ]]; then
+  echo "ERROR: --pdf-name / PDF_NAME must be a safe filename ending in .pdf (got: $PDF_NAME)" >&2
+  exit 1
+fi
+export PDF_NAME
+
 if ! [[ "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
   echo "ERROR: --port / PORT must be an integer from 1 to 65535 (got: $PORT)" >&2
   exit 1
@@ -232,6 +252,7 @@ printf "│  stats   : %-30s│\n" "$SHOW_STATS"
 printf "│  likes   : %-30s│\n" "$SHOW_LIKES"
 printf "│  pdf-q   : %-30s│\n" "$PDF_QUALITY"
 printf "│  pdf-mode: %-30s│\n" "$PDF_MODE"
+[[ "$PDF_NAME" != "slides.pdf" ]] && printf "│  pdf-name: %-30s│\n" "$PDF_NAME"
 [[ -n "$FONT" ]] && printf "│  font    : %-30s│\n" "$FONT"
 [[ -n "$EMOJI" ]] && printf "│  emoji   : %-30s│\n" "$EMOJI"
 printf "│  pdf     : %-30s│\n" "$PDF_ONLY"
@@ -290,7 +311,7 @@ _convert() {
   # Remove any stale file — previous runs may have left it with a different owner
   # (e.g. appuser/UID-1000 from an old image) that the current container can't overwrite.
   rm -f output/slides.html
-  export SERVER_HOST="$host" WS_SCHEME LINE_REVEAL SHOW_QR SHOW_LIKES PALETTE FONT EMOJI LOGO FRAME LOGO_ON PDF_MODE
+  export SERVER_HOST="$host" WS_SCHEME LINE_REVEAL SHOW_QR SHOW_LIKES PALETTE FONT EMOJI LOGO FRAME LOGO_ON PDF_MODE PDF_NAME
   MD2HTML_ARGS=(
       python md2html.py
       --input /workspace/slides.md
@@ -304,6 +325,7 @@ _convert() {
       --likes "$SHOW_LIKES"
       --pdf-quality "$PDF_QUALITY"
       --pdf-mode "$PDF_MODE"
+      --pdf-name "$PDF_NAME"
       --title "Presentation"
   )
   if [[ -n "$PALETTE" ]]; then
@@ -331,10 +353,10 @@ _convert() {
 
 # ── Shared: server-side PDF export via headless browser ──────────────────────
 _export_pdf() {
-  echo "▶ 3/3  pdf      output/slides.html → output/slides.pdf"
-  rm -f output/slides.pdf
-  $COMPOSE run --rm --remove-orphans pdf
-  echo "  ✓ output/slides.pdf ready"
+  echo "▶ 3/3  pdf      output/slides.html → output/$PDF_NAME"
+  rm -f "output/$PDF_NAME"
+  $COMPOSE run --rm --remove-orphans pdf /workspace/slides.html "/workspace/$PDF_NAME"
+  echo "  ✓ output/$PDF_NAME ready"
   echo
 }
 
@@ -489,7 +511,7 @@ else
     fi
   else
     if $PDF_ONLY; then
-      echo "PDF generated at: output/slides.pdf"
+      echo "PDF generated at: output/$PDF_NAME"
       echo
     else
       _endpoints "$HOST"

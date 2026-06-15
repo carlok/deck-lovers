@@ -24,6 +24,24 @@ import md2html
 
 # ── parse_slides ─────────────────────────────────────────────────────────────
 
+class TestParsePdfName:
+    def test_default(self, monkeypatch):
+        monkeypatch.delenv("PDF_NAME", raising=False)
+        assert md2html.parse_pdf_name(None) == "slides.pdf"
+
+    def test_strips_directory(self):
+        assert md2html.parse_pdf_name("exports/my-deck.pdf") == "my-deck.pdf"
+
+    def test_appends_pdf_extension(self):
+        assert md2html.parse_pdf_name("deck") == "deck.pdf"
+
+    def test_rejects_unsafe_names(self):
+        with pytest.raises(ValueError, match="invalid pdf name"):
+            md2html.parse_pdf_name("..")
+        with pytest.raises(ValueError, match="safe filename"):
+            md2html.parse_pdf_name("bad name.pdf")
+
+
 class TestParseSlides:
     def test_single_slide(self):
         raw = "## Hello\n\nContent"
@@ -231,6 +249,17 @@ class TestBuildHtml:
         assert "var PDF_MODE='raster';" in html
         assert "html2canvas" in html
         assert "jsPDF" in html
+        assert 'pdf.save(PDF_OUTPUT_NAME)' in html
+        assert 'var PDF_OUTPUT_NAME="slides.pdf"' in html
+
+    def test_custom_pdf_output_name_baked_into_js(self):
+        html = md2html.build_html(
+            self.SLIDES,
+            doc_title="Deck",
+            pdf_mode="raster",
+            pdf_output_name="octopus-deck.pdf",
+        )
+        assert 'var PDF_OUTPUT_NAME="octopus-deck.pdf"' in html
 
     def test_pdf_jpeg_quality_baked_into_js(self):
         html = md2html.build_html(
@@ -616,6 +645,23 @@ class TestMain:
         content = out_file.read_text(encoding="utf-8")
         assert 'class="emoji-img"' in content
         assert "/svg/1f9f5.svg" in content
+
+    def test_cli_pdf_name(self, tmp_path, monkeypatch):
+        import sys
+
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## Slide\n\nBody", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", [
+            "md2html.py",
+            "--input", str(md_file),
+            "--output", str(out_file),
+            "--pdf-name", "brand-deck.pdf",
+            "--pdf-mode", "raster",
+        ])
+        md2html.main()
+        content = out_file.read_text(encoding="utf-8")
+        assert 'var PDF_OUTPUT_NAME="brand-deck.pdf"' in content
 
     def test_cli_no_frame_disables_bars(self, tmp_path, monkeypatch):
         import sys

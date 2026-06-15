@@ -3,13 +3,14 @@
 
 import fs from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
 import puppeteer from "puppeteer-core";
 
 const inputHtml = process.argv[2] ?? "/workspace/slides.html";
 const outputPdf = process.argv[3] ?? "/workspace/slides.pdf";
 const downloadDir = "/workspace";
-const downloadedPdf = `${downloadDir}/slides.pdf`;
+const downloadedPdf = path.join(downloadDir, path.basename(outputPdf));
 const chromePath = process.env.CHROME_BIN ?? "/usr/bin/chromium";
 const pdfMode = (process.env.PDF_MODE ?? "vector").toLowerCase();
 
