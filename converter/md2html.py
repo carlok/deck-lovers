@@ -24,6 +24,7 @@ except ImportError:
     print("ERROR: pip install markdown", file=sys.stderr)
     sys.exit(1)
 
+from emoji_img import TwemojiFormat, parse_emoji_mode, substitute_twemoji
 from palette import build_font_head_links, build_root_css, load_palette, parse_font_family, resolve_palette_path
 
 SERVER_HOST = os.getenv("SERVER_HOST", "localhost")
@@ -168,8 +169,10 @@ def _postprocess(html: str) -> str:
     )
     return html
 
-def _md(text: str) -> str:
+def _md(text: str, *, emoji_mode: TwemojiFormat | None = None) -> str:
     text = _preprocess(text)
+    if emoji_mode:
+        text = substitute_twemoji(text, emoji_mode)
     result = markdown.markdown(text, extensions=_MD_EXTS)
     return _postprocess(result)
 
@@ -306,6 +309,20 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
   margin:.45em auto;
   border-radius:10px;
   box-shadow:0 8px 28px rgba(0,0,0,.16);
+}
+/* Twemoji / inline icons in titles and body (not full-width slide images) */
+.slide .emoji-img{
+  display:inline;
+  width:auto;
+  height:1.05em;
+  max-height:none;
+  margin:0 .06em 0 0;
+  padding:0;
+  border:none;
+  border-radius:0;
+  box-shadow:none;
+  vertical-align:-.12em;
+  object-fit:contain;
 }
 
 /* Stats slide */
@@ -840,13 +857,14 @@ def build_html(
     pdf_mode: str = "vector",
     palette: dict[str, str] | None = None,
     font_family: str | None = None,
+    emoji_mode: TwemojiFormat | None = None,
 ) -> str:
     total = len(slide_texts) + (1 if include_stats else 0)
 
     slides_html_parts = []
     for i, raw in enumerate(slide_texts):
         cls   = "title" if _is_title(raw) else "content"
-        inner = _md(raw)
+        inner = _md(raw, emoji_mode=emoji_mode)
         slides_html_parts.append(
             f'  <div class="slide {cls}" data-index="{i}">\n{inner}\n  </div>'
         )
@@ -1023,6 +1041,12 @@ def main() -> None:
         help="Google Font family for slide text (e.g. Montserrat, 'Open Sans'). "
         "Omit, or use system/none, for the system UI stack.",
     )
+    p.add_argument(
+        "--emoji",
+        default=os.getenv("EMOJI", ""),
+        metavar="MODE",
+        help="Emoji rendering: twemoji/svg (CDN SVG images), png, or off/native (default).",
+    )
     args = p.parse_args()
 
     apply_endpoint_config(
@@ -1042,6 +1066,12 @@ def main() -> None:
         font_family = parse_font_family(args.font or None)
     except ValueError as exc:
         print(f"ERROR: font: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        emoji_mode = parse_emoji_mode(args.emoji or None)
+    except ValueError as exc:
+        print(f"ERROR: emoji: {exc}", file=sys.stderr)
         sys.exit(1)
 
     try:
@@ -1074,6 +1104,8 @@ def main() -> None:
     print(f"[md2html] Palette: {palette_label} (accent {palette['accent']})")
     font_label = font_family if font_family else "system UI (default)"
     print(f"[md2html] Font: {font_label}")
+    emoji_label = f"twemoji ({emoji_mode})" if emoji_mode else "native (default)"
+    print(f"[md2html] Emoji: {emoji_label}")
 
     html = build_html(
         slide_texts,
@@ -1086,6 +1118,7 @@ def main() -> None:
         pdf_mode=args.pdf_mode,
         palette=palette,
         font_family=font_family,
+        emoji_mode=emoji_mode,
     )
 
     with open(args.output, "w", encoding="utf-8") as f:  # M1: context manager

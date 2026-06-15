@@ -1,1 +1,2 @@
 markdown>=3.7
+emoji>=2.14.0

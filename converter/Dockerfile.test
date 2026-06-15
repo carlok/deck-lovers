@@ -4,9 +4,9 @@ WORKDIR /app
 COPY converter/requirements.txt converter/requirements-test.txt ./
 RUN pip install --no-cache-dir -r requirements.txt -r requirements-test.txt
 
-COPY converter/md2html.py converter/tex_extract.py converter/palette.py ./
+COPY converter/md2html.py converter/tex_extract.py converter/palette.py converter/emoji_img.py ./
 COPY palettes/ ./palettes/
 COPY converter/tests/ ./tests/
 
-CMD ["pytest", "tests/", "--cov=md2html", "--cov=palette", "--cov-report=term-missing", \
+CMD ["pytest", "tests/", "--cov=md2html", "--cov=palette", "--cov=emoji_img", "--cov-report=term-missing", \
      "--cov-report=html:/reports/converter", "-v"]

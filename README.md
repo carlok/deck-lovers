@@ -246,6 +246,9 @@ PDF_MODE=vector ./deploy.sh --pdf-only
 
 # Slide font via Google Fonts (omit for system UI stack)
 ./deploy.sh --font Montserrat
+
+# Crisp emoji in titles (Twemoji SVG via jsDelivr; needs network at convert/PDF time)
+./deploy.sh --emoji twemoji --convert-only --slides-file tmp/deck.md
 FONT="Open Sans" ./deploy.sh --convert-only
 
 # Override runtime or hostname
@@ -254,8 +257,8 @@ COMPOSE="podman compose" SERVER_HOST=192.168.0.106 ./deploy.sh
 # Custom SSH port for remote
 VPS_PORT=2222 VPS=root@YOUR_SERVER_IP ./deploy.sh
 
-# High-quality PDF from a custom deck, no QR, no stats slide
-./deploy.sh --pdf-only --slides-file tmp/cottonia_slides2.md --no-qr --no-stats
+# PDF only: custom deck, palette, font, sharp emoji — no QR, no stats slide
+./deploy.sh --pdf-only --slides-file tmp/example.md --no-qr --no-stats --palette octopuslab --font Montserrat --emoji twemoji
 
 # Smaller raster PDF (JPEG quality; default export is vector text + links).
 ./deploy.sh --pdf-only --slides-file tmp/deck.md --no-qr --no-stats --pdf-mode raster --pdf-quality 0.82
@@ -663,6 +666,33 @@ FONT="Open Sans" ./deploy.sh --convert-only
 ```
 
 Omit `--font`, or set `FONT=system` / `FONT=none`, to disable a custom font. The family name is passed to Google Fonts at convert time (requires network when viewing or exporting PDF).
+
+### Slide emoji (PDF sharpness)
+
+Unicode emoji in headings (e.g. `# 🧵 CottonIA`) use the OS **color emoji font** by default. In vector PDF those glyphs are often embedded as small bitmaps and can look soft when large.
+
+**Option A — Twemoji (automatic):** replace every emoji in the deck with CDN SVG images that scale with the text:
+
+```bash
+./deploy.sh --pdf-only --slides-file tmp/example.md --no-qr --no-stats --palette octopuslab --font Montserrat --emoji twemoji
+EMOJI=twemoji ./deploy.sh --convert-only --slides-file tmp/deck.md
+```
+
+Use `--emoji png` or `EMOJI=png` for 72×72 PNG assets instead of SVG. Omit `--emoji` (or `EMOJI=off`) for native emoji.
+
+**Option B — your own asset (manual):** put an SVG or PNG in `output/img/` and reference it in markdown:
+
+```markdown
+# <img src="img/thread.svg" class="emoji-img" alt="🧵"> CottonIA
+```
+
+or a normal image (centered block style — add `class="emoji-img"` for inline sizing):
+
+```markdown
+# ![thread](img/thread.svg) CottonIA
+```
+
+Inline HTML with `class="emoji-img"` keeps the icon at `1.05em` height so it matches heading size in HTML and PDF.
 
 ### Custom slide backgrounds
 

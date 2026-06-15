@@ -9,7 +9,7 @@ WORKDIR /app
 COPY converter/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY converter/tex_extract.py converter/md2html.py converter/palette.py ./
+COPY converter/tex_extract.py converter/md2html.py converter/palette.py converter/emoji_img.py ./
 COPY palettes/ ./palettes/
 
 CMD ["python", "md2html.py", \

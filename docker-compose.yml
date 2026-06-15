@@ -38,6 +38,7 @@ services:
       - SHOW_LIKES=${SHOW_LIKES:-on}
       - PALETTE=${PALETTE:-}
       - FONT=${FONT:-}
+      - EMOJI=${EMOJI:-}
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     profiles: ["convert"]

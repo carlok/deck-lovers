@@ -16,6 +16,7 @@
 #   ./deploy.sh --port 9000              # host port (default 8000); same as PORT=9000
 #   ./deploy.sh --palette octopuslab     # JSON palette (name or path); PALETTE=… env
 #   ./deploy.sh --font Montserrat        # Google Font for slides; FONT=… env
+#   ./deploy.sh --emoji twemoji          # crisp Twemoji SVG in HTML/PDF; EMOJI=… env
 #   ./deploy.sh --qr off                 # same as --no-qr (general form)
 #   ./deploy.sh --likes off              # same as --no-likes (projector-side only)
 #   ./deploy.sh --cloudflare <url>       # rebake Cloudflare tunnel URL into QR code
@@ -60,6 +61,7 @@ PDF_QUALITY="${PDF_QUALITY:-0.92}" # --pdf-quality <0.5–1> or PDF_QUALITY env 
 PORT=${PORT:-8000}                 # --port <n> or PORT env
 PALETTE="${PALETTE:-}"             # --palette <name|path> or PALETTE env
 FONT="${FONT:-}"                   # --font <name> or FONT env (Google Fonts)
+EMOJI="${EMOJI:-}"                 # --emoji twemoji|png|off or EMOJI env
 PDF_MODE="${PDF_MODE:-vector}"     # --pdf-mode vector|raster or PDF_MODE env
 
 while [[ $# -gt 0 ]]; do
@@ -95,6 +97,8 @@ while [[ $# -gt 0 ]]; do
       PALETTE="${2:?'--palette requires a palette name or JSON path'}"; shift 2 ;;
     --font)
       FONT="${2:?'--font requires a Google Font family name (e.g. Montserrat)'}"; shift 2 ;;
+    --emoji)
+      EMOJI="${2:?'--emoji requires twemoji, svg, png, or off'}"; shift 2 ;;
     --cloudflare)
       CF_URL="${2:?'--cloudflare requires a URL argument'}";  shift 2 ;;
     *) shift ;;
@@ -214,6 +218,7 @@ printf "│  likes   : %-30s│\n" "$SHOW_LIKES"
 printf "│  pdf-q   : %-30s│\n" "$PDF_QUALITY"
 printf "│  pdf-mode: %-30s│\n" "$PDF_MODE"
 [[ -n "$FONT" ]] && printf "│  font    : %-30s│\n" "$FONT"
+[[ -n "$EMOJI" ]] && printf "│  emoji   : %-30s│\n" "$EMOJI"
 printf "│  pdf     : %-30s│\n" "$PDF_ONLY"
 [[ "$MODE" == "remote" ]] && printf "│  vps     : %-30s│\n" "$VPS"
 echo "└─────────────────────────────────────────┘"
@@ -270,7 +275,7 @@ _convert() {
   # Remove any stale file — previous runs may have left it with a different owner
   # (e.g. appuser/UID-1000 from an old image) that the current container can't overwrite.
   rm -f output/slides.html
-  export SERVER_HOST="$host" WS_SCHEME LINE_REVEAL SHOW_QR SHOW_LIKES PALETTE FONT PDF_MODE
+  export SERVER_HOST="$host" WS_SCHEME LINE_REVEAL SHOW_QR SHOW_LIKES PALETTE FONT EMOJI PDF_MODE
   MD2HTML_ARGS=(
       python md2html.py
       --input /workspace/slides.md
@@ -291,6 +296,9 @@ _convert() {
   fi
   if [[ -n "$FONT" ]]; then
     MD2HTML_ARGS+=(--font "$FONT")
+  fi
+  if [[ -n "$EMOJI" ]]; then
+    MD2HTML_ARGS+=(--emoji "$EMOJI")
   fi
   $COMPOSE run --rm --remove-orphans md2html "${MD2HTML_ARGS[@]}"
   echo "  ✓ output/slides.html ready"

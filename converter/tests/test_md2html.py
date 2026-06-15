@@ -239,6 +239,21 @@ class TestBuildHtml:
         assert "Montserrat" in html
         assert "montserrat" in html.lower()
 
+    def test_default_keeps_native_emoji(self):
+        html = self._html(["# 🧵 Title"])
+        assert "<h1>🧵 Title</h1>" in html
+        assert 'class="emoji-img"' not in html
+
+    def test_twemoji_replaces_heading_emoji(self):
+        html = md2html.build_html(
+            ["# 🧵 Title"],
+            doc_title="Deck",
+            emoji_mode="svg",
+        )
+        assert 'class="emoji-img"' in html
+        assert "/svg/1f9f5.svg" in html
+        assert "<h1>" in html and "Title</h1>" in html
+
     def test_stats_slide_appended(self):
         html = self._html()
         assert "stats" in html.lower() or "likes" in html.lower()
@@ -497,6 +512,23 @@ class TestMain:
         ])
         with pytest.raises(SystemExit):
             md2html.main()
+
+    def test_cli_emoji_twemoji(self, tmp_path, monkeypatch):
+        import sys
+
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("# 🧵 Title\n", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", [
+            "md2html.py",
+            "--input", str(md_file),
+            "--output", str(out_file),
+            "--emoji", "twemoji",
+        ])
+        md2html.main()
+        content = out_file.read_text(encoding="utf-8")
+        assert 'class="emoji-img"' in content
+        assert "/svg/1f9f5.svg" in content
 
     def test_cli_pdf_quality_invalid_exits(self, tmp_path, monkeypatch):
         import sys
