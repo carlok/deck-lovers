@@ -37,6 +37,7 @@ services:
       - SHOW_QR=${SHOW_QR:-on}
       - SHOW_LIKES=${SHOW_LIKES:-on}
       - PALETTE=${PALETTE:-}
+      - FONT=${FONT:-}
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     profiles: ["convert"]

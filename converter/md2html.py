@@ -24,7 +24,7 @@ except ImportError:
     print("ERROR: pip install markdown", file=sys.stderr)
     sys.exit(1)
 
-from palette import build_root_css, load_palette, resolve_palette_path
+from palette import build_font_head_links, build_root_css, load_palette, parse_font_family, resolve_palette_path
 
 SERVER_HOST = os.getenv("SERVER_HOST", "localhost")
 PORT        = os.getenv("PORT", "8000")
@@ -839,6 +839,7 @@ def build_html(
     pdf_jpeg_quality: float = 0.92,
     pdf_mode: str = "vector",
     palette: dict[str, str] | None = None,
+    font_family: str | None = None,
 ) -> str:
     total = len(slide_texts) + (1 if include_stats else 0)
 
@@ -872,7 +873,7 @@ def build_html(
         raise ValueError("pdf_mode must be 'vector' or 'raster'")
 
     colors = palette if palette is not None else load_palette(None)
-    css = _CSS.replace("__ROOT_CSS__", build_root_css(colors))
+    css = _CSS.replace("__ROOT_CSS__", build_root_css(colors, font_family))
     accent = colors["accent"]
     init_scripts = _INIT_SCRIPTS.replace("__ACCENT__", accent)
 
@@ -888,6 +889,7 @@ def build_html(
     )
 
     escaped_title = _esc.escape(doc_title)
+    font_links = build_font_head_links(font_family)
     qr_script = f'<script src="{_QR_CDN}"></script>' if show_qr else ""
     qr_overlay = """<div id="qr-overlay" title="Audience companion">
   <div id="qrcode"></div>
@@ -908,6 +910,7 @@ def build_html(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>{escaped_title}</title>
+{font_links}
 <link rel="stylesheet" href="{_FA_CDN}">
 <link rel="stylesheet" href="{_HLJS_CSS}">
 {qr_script}
@@ -1013,6 +1016,13 @@ def main() -> None:
         default=os.getenv("PDF_MODE", "vector"),
         help="PDF export mode: vector (text + links, default) or raster (JPEG screenshots).",
     )
+    p.add_argument(
+        "--font",
+        default=os.getenv("FONT", ""),
+        metavar="NAME",
+        help="Google Font family for slide text (e.g. Montserrat, 'Open Sans'). "
+        "Omit, or use system/none, for the system UI stack.",
+    )
     args = p.parse_args()
 
     apply_endpoint_config(
@@ -1026,6 +1036,12 @@ def main() -> None:
         palette = load_palette(palette_path)
     except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
         print(f"ERROR: palette: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        font_family = parse_font_family(args.font or None)
+    except ValueError as exc:
+        print(f"ERROR: font: {exc}", file=sys.stderr)
         sys.exit(1)
 
     try:
@@ -1056,6 +1072,8 @@ def main() -> None:
     print(f"[md2html] Audience: {AUDIENCE_URL}")
     palette_label = palette_path.name if palette_path else "built-in default"
     print(f"[md2html] Palette: {palette_label} (accent {palette['accent']})")
+    font_label = font_family if font_family else "system UI (default)"
+    print(f"[md2html] Font: {font_label}")
 
     html = build_html(
         slide_texts,
@@ -1067,6 +1085,7 @@ def main() -> None:
         pdf_jpeg_quality=args.pdf_quality,
         pdf_mode=args.pdf_mode,
         palette=palette,
+        font_family=font_family,
     )
 
     with open(args.output, "w", encoding="utf-8") as f:  # M1: context manager

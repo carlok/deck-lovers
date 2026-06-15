@@ -244,6 +244,10 @@ PALETTE=default ./deploy.sh --convert-only
 ./deploy.sh --pdf-only --pdf-mode vector
 PDF_MODE=vector ./deploy.sh --pdf-only
 
+# Slide font via Google Fonts (omit for system UI stack)
+./deploy.sh --font Montserrat
+FONT="Open Sans" ./deploy.sh --convert-only
+
 # Override runtime or hostname
 COMPOSE="podman compose" SERVER_HOST=192.168.0.106 ./deploy.sh
 
@@ -512,6 +516,7 @@ python converter/md2html.py \
   --server-host localhost \
   --port 8000 \
   --palette palettes/default.json \
+  --font Montserrat \
   --pdf-mode vector \
   --qr off   # optional: hide QR overlay
 
@@ -647,6 +652,17 @@ Example custom palette:
 ```
 
 Re-run conversion after editing a palette (`./deploy.sh --convert-only` or full `./deploy.sh`).
+
+### Slide fonts
+
+By default slides use the **system UI font stack** (San Francisco, Segoe UI, etc.). To load a [Google Font](https://fonts.google.com/) for both HTML and vector PDF:
+
+```bash
+./deploy.sh --font Montserrat
+FONT="Open Sans" ./deploy.sh --convert-only
+```
+
+Omit `--font`, or set `FONT=system` / `FONT=none`, to disable a custom font. The family name is passed to Google Fonts at convert time (requires network when viewing or exporting PDF).
 
 ### Custom slide backgrounds
 

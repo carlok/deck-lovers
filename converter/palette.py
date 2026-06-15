@@ -29,6 +29,15 @@ DEFAULT_PALETTE: dict[str, str] = {
 }
 
 _HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+_FONT_NAME_RE = re.compile(r"^[\w][\w\s\-]*$")
+
+_SYSTEM_SANS_FALLBACK = (
+    'system-ui,-apple-system,"Segoe UI","Noto Color Emoji",'
+    '"Apple Color Emoji","Segoe UI Emoji",sans-serif'
+)
+
+# Weights loaded from Google Fonts for slide headings and body.
+_GOOGLE_FONT_WEIGHTS = "ital,wght@0,400;0,600;0,700;0,800;1,400"
 
 
 def _expand_shorthand_hex(hex_color: str) -> str:
@@ -108,10 +117,56 @@ def load_palette(path: Path | None) -> dict[str, str]:
     return merged
 
 
-def build_root_css(palette: dict[str, str]) -> str:
+def parse_font_family(value: str | None) -> str | None:
+    """Return a Google Font family name, or None for the system UI stack.
+
+    Empty strings and aliases (system, default, none) disable a custom font.
+    """
+    if value is None:
+        return None
+    raw = value.strip()
+    if not raw or raw.lower() in {"system", "system-ui", "default", "none"}:
+        return None
+    if not _FONT_NAME_RE.match(raw):
+        raise ValueError(
+            f"font family must contain only letters, digits, spaces, or hyphens, got: {value!r}"
+        )
+    return raw
+
+
+def sans_stack(font_family: str | None = None) -> str:
+    """Build the CSS font-family value for --sans."""
+    if not font_family:
+        return _SYSTEM_SANS_FALLBACK
+    return f'"{font_family}",{_SYSTEM_SANS_FALLBACK}'
+
+
+def google_fonts_css_url(font_family: str) -> str:
+    """Google Fonts CSS2 URL for a family name (e.g. Montserrat, Open Sans)."""
+    family_param = font_family.strip().replace(" ", "+")
+    return (
+        f"https://fonts.googleapis.com/css2?family={family_param}:"
+        f"{_GOOGLE_FONT_WEIGHTS}&display=swap"
+    )
+
+
+def build_font_head_links(font_family: str | None) -> str:
+    """Return <link> tags for Google Fonts, or empty string when using system fonts."""
+    if not font_family:
+        return ""
+    url = google_fonts_css_url(font_family)
+    return (
+        '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
+        f'<link rel="stylesheet" href="{url}">'
+    )
+
+
+def build_root_css(palette: dict[str, str], font_family: str | None = None) -> str:
     """Emit :root { … } block for slide deck CSS variables."""
     accent = palette["accent"]
     dark = palette["dark"]
+    sans = sans_stack(font_family)
     lines = [
         ":root{",
         f"  --accent:{accent};--accent-hover:{palette['accent-hover']};",
@@ -128,8 +183,7 @@ def build_root_css(palette: dict[str, str]) -> str:
         f"  --accent-shadow:{_rgba(accent, 0.32)};--accent-22:{_rgba(accent, 0.22)};",
         f"  --link-30:{_rgba(palette['link'], 0.3)};",
         '  --mono:"SF Mono","Fira Code","Consolas",monospace;',
-        '  --sans:system-ui,-apple-system,"Segoe UI","Noto Color Emoji",'
-        '"Apple Color Emoji","Segoe UI Emoji",sans-serif;',
+        f"  --sans:{sans};",
         "  --ease:cubic-bezier(.4,0,.2,1);--dur:360ms;",
         "}",
     ]

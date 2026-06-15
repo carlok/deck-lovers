@@ -11,9 +11,13 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from palette import (  # noqa: E402
     DEFAULT_PALETTE,
+    build_font_head_links,
     build_root_css,
+    google_fonts_css_url,
     load_palette,
+    parse_font_family,
     resolve_palette_path,
+    sans_stack,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -71,5 +75,44 @@ class TestBuildRootCss:
         css = build_root_css(load_palette(INDIGO_JSON))
         assert ":root{" in css
         assert "--accent:#425ec9" in css.lower().replace(" ", "")
+        assert "system-ui" in css
         assert "--nav-bg:rgba(" in css
         assert "--sans:" in css
+
+    def test_custom_font_in_sans_stack(self):
+        css = build_root_css(load_palette(INDIGO_JSON), "Montserrat")
+        assert "montserrat" in css.lower()
+        assert "system-ui" in css
+
+
+class TestFontFamily:
+    def test_parse_font_none_aliases(self):
+        assert parse_font_family(None) is None
+        assert parse_font_family("") is None
+        assert parse_font_family("system") is None
+        assert parse_font_family("none") is None
+
+    def test_parse_font_name(self):
+        assert parse_font_family("Montserrat") == "Montserrat"
+        assert parse_font_family("Open Sans") == "Open Sans"
+
+    def test_parse_font_invalid_raises(self):
+        with pytest.raises(ValueError, match="letters"):
+            parse_font_family("Bad;inject")
+
+    def test_sans_stack_without_custom_font(self):
+        stack = sans_stack(None)
+        assert "montserrat" not in stack.lower()
+        assert "system-ui" in stack
+
+    def test_google_fonts_url_encodes_spaces(self):
+        url = google_fonts_css_url("Open Sans")
+        assert "family=Open+Sans" in url
+
+    def test_build_font_head_links_empty_without_font(self):
+        assert build_font_head_links(None) == ""
+
+    def test_build_font_head_links_includes_stylesheet(self):
+        links = build_font_head_links("Montserrat")
+        assert "fonts.googleapis.com" in links
+        assert "Montserrat" in links

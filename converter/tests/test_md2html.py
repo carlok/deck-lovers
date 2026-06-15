@@ -228,6 +228,17 @@ class TestBuildHtml:
         html = self._html()
         assert "font-awesome" in html.lower() or "fontawesome" in html.lower()
 
+    def test_default_uses_system_font_stack(self):
+        html = self._html()
+        assert "fonts.googleapis.com" not in html
+        assert "system-ui" in html
+
+    def test_custom_font_link_and_css(self):
+        html = md2html.build_html(self.SLIDES, doc_title="Deck", font_family="Montserrat")
+        assert "fonts.googleapis.com" in html
+        assert "Montserrat" in html
+        assert "montserrat" in html.lower()
+
     def test_stats_slide_appended(self):
         html = self._html()
         assert "stats" in html.lower() or "likes" in html.lower()
@@ -454,6 +465,38 @@ class TestMain:
         md2html.main()
         content = out_file.read_text(encoding="utf-8")
         assert "PDF_JPEG_QUALITY=0.8" in content
+
+    def test_cli_font_montserrat(self, tmp_path, monkeypatch):
+        import sys
+
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## Slide\n\nBody", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", [
+            "md2html.py",
+            "--input", str(md_file),
+            "--output", str(out_file),
+            "--font", "Montserrat",
+        ])
+        md2html.main()
+        content = out_file.read_text(encoding="utf-8")
+        assert "fonts.googleapis.com" in content
+        assert "Montserrat" in content
+
+    def test_cli_font_invalid_exits(self, tmp_path, monkeypatch):
+        import sys
+
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## Slide\n\nBody", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", [
+            "md2html.py",
+            "--input", str(md_file),
+            "--output", str(out_file),
+            "--font", "Bad;Name",
+        ])
+        with pytest.raises(SystemExit):
+            md2html.main()
 
     def test_cli_pdf_quality_invalid_exits(self, tmp_path, monkeypatch):
         import sys
