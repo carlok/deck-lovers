@@ -17,6 +17,9 @@
 #   ./deploy.sh --palette octopuslab     # JSON palette (name or path); PALETTE=… env
 #   ./deploy.sh --font Montserrat        # Google Font for slides; FONT=… env
 #   ./deploy.sh --emoji twemoji          # crisp Twemoji SVG in HTML/PDF; EMOJI=… env
+#   ./deploy.sh --logo img/logo.png      # override palette corner logo; LOGO=… env
+#   ./deploy.sh --no-frame               # disable accent bars; FRAME=off env
+#   ./deploy.sh --logo-on content        # logo visibility; LOGO_ON=… env
 #   ./deploy.sh --qr off                 # same as --no-qr (general form)
 #   ./deploy.sh --likes off              # same as --no-likes (projector-side only)
 #   ./deploy.sh --cloudflare <url>       # rebake Cloudflare tunnel URL into QR code
@@ -32,6 +35,9 @@
 #   PORT         app host port (default 8000); overridden by --port
 #   PALETTE      palette name or JSON path for md2html (e.g. octopuslab)
 #   FONT         Google Font family for slides (e.g. Montserrat); omit for system UI
+#   LOGO         override palette logo path (relative to output/slides.html)
+#   FRAME        set to off to disable top/bottom accent bars (--no-frame)
+#   LOGO_ON      all | title | content | none | content_not_last
 #   PDF_MODE     vector (default) or raster for PDF export
 #   COMPOSE      override compose runtime (default: auto-detect)
 #   SERVER_HOST  override hostname baked into QR code (remote: auto-sslip.io)
@@ -62,6 +68,9 @@ PORT=${PORT:-8000}                 # --port <n> or PORT env
 PALETTE="${PALETTE:-}"             # --palette <name|path> or PALETTE env
 FONT="${FONT:-}"                   # --font <name> or FONT env (Google Fonts)
 EMOJI="${EMOJI:-}"                 # --emoji twemoji|png|off or EMOJI env
+LOGO="${LOGO:-}"                   # --logo <path> or LOGO env (override palette logo)
+FRAME="${FRAME:-}"                 # FRAME=off or --no-frame disables accent bars
+LOGO_ON="${LOGO_ON:-}"             # --logo-on <mode> or LOGO_ON env
 PDF_MODE="${PDF_MODE:-vector}"     # --pdf-mode vector|raster or PDF_MODE env
 
 while [[ $# -gt 0 ]]; do
@@ -99,6 +108,12 @@ while [[ $# -gt 0 ]]; do
       FONT="${2:?'--font requires a Google Font family name (e.g. Montserrat)'}"; shift 2 ;;
     --emoji)
       EMOJI="${2:?'--emoji requires twemoji, svg, png, or off'}"; shift 2 ;;
+    --logo)
+      LOGO="${2:?'--logo requires a path (e.g. img/logo.png)'}"; shift 2 ;;
+    --no-frame)
+      FRAME="off"; shift ;;
+    --logo-on)
+      LOGO_ON="${2:?'--logo-on requires all|title|content|none|content_not_last'}"; shift 2 ;;
     --cloudflare)
       CF_URL="${2:?'--cloudflare requires a URL argument'}";  shift 2 ;;
     *) shift ;;
@@ -275,7 +290,7 @@ _convert() {
   # Remove any stale file — previous runs may have left it with a different owner
   # (e.g. appuser/UID-1000 from an old image) that the current container can't overwrite.
   rm -f output/slides.html
-  export SERVER_HOST="$host" WS_SCHEME LINE_REVEAL SHOW_QR SHOW_LIKES PALETTE FONT EMOJI PDF_MODE
+  export SERVER_HOST="$host" WS_SCHEME LINE_REVEAL SHOW_QR SHOW_LIKES PALETTE FONT EMOJI LOGO FRAME LOGO_ON PDF_MODE
   MD2HTML_ARGS=(
       python md2html.py
       --input /workspace/slides.md
@@ -299,6 +314,15 @@ _convert() {
   fi
   if [[ -n "$EMOJI" ]]; then
     MD2HTML_ARGS+=(--emoji "$EMOJI")
+  fi
+  if [[ -n "$LOGO" ]]; then
+    MD2HTML_ARGS+=(--logo "$LOGO")
+  fi
+  if [[ "$FRAME" == "off" ]]; then
+    MD2HTML_ARGS+=(--no-frame)
+  fi
+  if [[ -n "$LOGO_ON" ]]; then
+    MD2HTML_ARGS+=(--logo-on "$LOGO_ON")
   fi
   $COMPOSE run --rm --remove-orphans md2html "${MD2HTML_ARGS[@]}"
   echo "  ✓ output/slides.html ready"

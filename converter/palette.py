@@ -28,6 +28,21 @@ DEFAULT_PALETTE: dict[str, str] = {
     "title-gradient-end": "#FFF8EC",
 }
 
+DEFAULT_BRANDING: dict[str, Any] = {
+    "frame_top": False,
+    "frame_bottom": False,
+    "frame_height": "5px",
+    "frame_color": "accent",
+    "logo": "",
+    "logo_height": "40px",
+    "logo_position": "top-right",
+    "logo_on": "none",
+}
+
+LOGO_ON_VALUES = frozenset({"all", "title", "content", "none", "content_not_last"})
+LOGO_POSITION_VALUES = frozenset({"top-right"})
+_CSS_LENGTH_RE = re.compile(r"^\d+(\.\d+)?(px|rem|em|vh|vw|%)$")
+
 _HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
 _FONT_NAME_RE = re.compile(r"^[\w][\w\s\-]*$")
 
@@ -61,6 +76,65 @@ def _validate_hex(value: str, key: str) -> str:
     if not _HEX_RE.match(value):
         raise ValueError(f"palette key '{key}' must be a #RGB or #RRGGBB hex color, got: {value!r}")
     return _expand_shorthand_hex(value)
+
+
+def _validate_css_length(value: str, key: str) -> str:
+    raw = value.strip()
+    if not _CSS_LENGTH_RE.match(raw):
+        raise ValueError(
+            f"branding key '{key}' must be a CSS length (e.g. 5px, 2.5rem), got: {value!r}"
+        )
+    return raw
+
+
+def _read_palette_json(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    with path.open(encoding="utf-8") as f:
+        data: dict[str, Any] = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"palette {path}: expected a JSON object at top level")
+    return data
+
+
+def _parse_branding_dict(raw: dict[str, Any], *, source: str) -> dict[str, Any]:
+    """Merge and validate a branding mapping onto DEFAULT_BRANDING."""
+    merged: dict[str, Any] = dict(DEFAULT_BRANDING)
+    for key, value in raw.items():
+        if key not in DEFAULT_BRANDING:
+            raise ValueError(f"{source}: unknown branding key '{key}'")
+        merged[key] = value
+
+    merged["frame_top"] = bool(merged["frame_top"])
+    merged["frame_bottom"] = bool(merged["frame_bottom"])
+    merged["frame_height"] = _validate_css_length(str(merged["frame_height"]), "frame_height")
+    merged["logo_height"] = _validate_css_length(str(merged["logo_height"]), "logo_height")
+
+    frame_color = str(merged["frame_color"]).strip()
+    if frame_color in {"accent", "dark"}:
+        merged["frame_color"] = frame_color
+    else:
+        merged["frame_color"] = _validate_hex(frame_color, "frame_color")
+
+    logo = str(merged["logo"]).strip()
+    merged["logo"] = logo
+
+    logo_on = str(merged["logo_on"]).strip().lower()
+    if logo_on not in LOGO_ON_VALUES:
+        raise ValueError(
+            f"{source}: branding.logo_on must be one of {sorted(LOGO_ON_VALUES)}, got: {logo_on!r}"
+        )
+    merged["logo_on"] = logo_on
+
+    logo_position = str(merged["logo_position"]).strip().lower()
+    if logo_position not in LOGO_POSITION_VALUES:
+        raise ValueError(
+            f"{source}: branding.logo_position must be one of {sorted(LOGO_POSITION_VALUES)}, "
+            f"got: {logo_position!r}"
+        )
+    merged["logo_position"] = logo_position
+
+    return merged
 
 
 def resolve_palette_path(
@@ -99,14 +173,14 @@ def load_palette(path: Path | None) -> dict[str, str]:
     if path is None:
         return merged
 
-    with path.open(encoding="utf-8") as f:
-        data: dict[str, Any] = json.load(f)
-
+    data = _read_palette_json(path)
     colors = data.get("colors", data)
     if not isinstance(colors, dict):
         raise ValueError(f"palette {path}: expected a 'colors' object or top-level color map")
 
     for key, value in colors.items():
+        if key in DEFAULT_BRANDING or key == "branding":
+            continue
         if not isinstance(value, str):
             raise ValueError(f"palette {path}: color '{key}' must be a string")
         merged[key] = _validate_hex(value, key)
@@ -115,6 +189,50 @@ def load_palette(path: Path | None) -> dict[str, str]:
         merged[key] = _validate_hex(value, key)
 
     return merged
+
+
+def load_branding(path: Path | None) -> dict[str, Any]:
+    """Load optional branding block from a palette JSON file."""
+    if path is None:
+        return dict(DEFAULT_BRANDING)
+
+    data = _read_palette_json(path)
+    branding = data.get("branding")
+    if branding is None:
+        return dict(DEFAULT_BRANDING)
+    if not isinstance(branding, dict):
+        raise ValueError(f"palette {path}: expected 'branding' to be an object")
+    return _parse_branding_dict(branding, source=f"palette {path}")
+
+
+def merge_branding(*layers: dict[str, Any] | None) -> dict[str, Any]:
+    """Merge branding dicts left-to-right; later layers override earlier ones."""
+    merged = dict(DEFAULT_BRANDING)
+    for layer in layers:
+        if not layer:
+            continue
+        for key, value in layer.items():
+            if key in merged:
+                merged[key] = value
+    return _parse_branding_dict(merged, source="merged branding")
+
+
+def branding_is_active(branding: dict[str, Any] | None) -> bool:
+    """True when any frame bar or logo branding should render."""
+    if not branding:
+        return False
+    if branding.get("frame_top") or branding.get("frame_bottom"):
+        return True
+    return bool(str(branding.get("logo", "")).strip())
+
+
+def resolve_frame_color_css(frame_color: str, palette: dict[str, str]) -> str:
+    """Return a CSS color value for frame bars."""
+    if frame_color == "accent":
+        return "var(--accent)"
+    if frame_color == "dark":
+        return "var(--dark)"
+    return frame_color
 
 
 def parse_font_family(value: str | None) -> str | None:
@@ -130,6 +248,20 @@ def parse_font_family(value: str | None) -> str | None:
     if not _FONT_NAME_RE.match(raw):
         raise ValueError(
             f"font family must contain only letters, digits, spaces, or hyphens, got: {value!r}"
+        )
+    return raw
+
+
+def parse_logo_on(value: str | None) -> str | None:
+    """Validate --logo-on CLI value."""
+    if value is None:
+        return None
+    raw = value.strip().lower()
+    if not raw:
+        return None
+    if raw not in LOGO_ON_VALUES:
+        raise ValueError(
+            f"logo_on must be one of {sorted(LOGO_ON_VALUES)}, got: {value!r}"
         )
     return raw
 
@@ -162,7 +294,11 @@ def build_font_head_links(font_family: str | None) -> str:
     )
 
 
-def build_root_css(palette: dict[str, str], font_family: str | None = None) -> str:
+def build_root_css(
+    palette: dict[str, str],
+    font_family: str | None = None,
+    branding: dict[str, Any] | None = None,
+) -> str:
     """Emit :root { … } block for slide deck CSS variables."""
     accent = palette["accent"]
     dark = palette["dark"]
@@ -185,6 +321,12 @@ def build_root_css(palette: dict[str, str], font_family: str | None = None) -> s
         '  --mono:"SF Mono","Fira Code","Consolas",monospace;',
         f"  --sans:{sans};",
         "  --ease:cubic-bezier(.4,0,.2,1);--dur:360ms;",
-        "}",
     ]
+    if branding_is_active(branding):
+        assert branding is not None
+        frame_color = resolve_frame_color_css(str(branding["frame_color"]), palette)
+        lines.append(f"  --frame-bar-height:{branding['frame_height']};")
+        lines.append(f"  --frame-bar-color:{frame_color};")
+        lines.append(f"  --logo-height:{branding['logo_height']};")
+    lines.append("}")
     return "\n".join(lines)

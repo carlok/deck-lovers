@@ -10,18 +10,25 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from palette import (  # noqa: E402
+    DEFAULT_BRANDING,
     DEFAULT_PALETTE,
+    branding_is_active,
     build_font_head_links,
     build_root_css,
     google_fonts_css_url,
+    load_branding,
     load_palette,
+    merge_branding,
     parse_font_family,
+    parse_logo_on,
+    resolve_frame_color_css,
     resolve_palette_path,
     sans_stack,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
 INDIGO_JSON = FIXTURES / "indigo-palette.json"
+BRANDED_JSON = FIXTURES / "branded-palette.json"
 
 
 class TestResolvePalettePath:
@@ -116,3 +123,62 @@ class TestFontFamily:
         links = build_font_head_links("Montserrat")
         assert "fonts.googleapis.com" in links
         assert "Montserrat" in links
+
+
+class TestBranding:
+    def test_default_branding_inactive(self):
+        branding = load_branding(None)
+        assert branding == DEFAULT_BRANDING
+        assert not branding_is_active(branding)
+
+    def test_load_branding_from_fixture(self):
+        branding = load_branding(BRANDED_JSON)
+        assert branding["frame_top"] is True
+        assert branding["logo"] == "img/test-logo.png"
+        assert branding["logo_on"] == "content"
+
+    def test_invalid_logo_on_raises(self, tmp_path: Path):
+        bad = tmp_path / "bad.json"
+        bad.write_text(
+            json.dumps({"branding": {"logo_on": "sometimes"}}),
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="logo_on"):
+            load_branding(bad)
+
+    def test_frame_color_accent_resolves_to_css_var(self):
+        palette = load_palette(INDIGO_JSON)
+        branding = load_branding(BRANDED_JSON)
+        assert resolve_frame_color_css(str(branding["frame_color"]), palette) == "var(--accent)"
+
+    def test_frame_color_hex(self, tmp_path: Path):
+        path = tmp_path / "hex.json"
+        path.write_text(
+            json.dumps({"branding": {"frame_color": "#AABBCC"}}),
+            encoding="utf-8",
+        )
+        branding = load_branding(path)
+        assert branding["frame_color"] == "#aabbcc"
+
+    def test_merge_branding_cli_overrides_palette(self):
+        base = load_branding(BRANDED_JSON)
+        merged = merge_branding(base, {"logo_on": "none"})
+        assert merged["logo_on"] == "none"
+        assert merged["frame_top"] is True
+
+    def test_build_root_css_includes_frame_vars_when_active(self):
+        palette = load_palette(BRANDED_JSON)
+        branding = load_branding(BRANDED_JSON)
+        css = build_root_css(palette, branding=branding)
+        assert "--frame-bar-height:5px" in css.replace(" ", "")
+        assert "--frame-bar-color:var(--accent)" in css.replace(" ", "")
+        assert "--logo-height:40px" in css.replace(" ", "")
+
+    def test_build_root_css_omits_frame_vars_when_inactive(self):
+        css = build_root_css(load_palette(INDIGO_JSON), branding=DEFAULT_BRANDING)
+        assert "--frame-bar-height" not in css
+
+    def test_parse_logo_on_validates(self):
+        assert parse_logo_on("content_not_last") == "content_not_last"
+        with pytest.raises(ValueError, match="logo_on"):
+            parse_logo_on("bogus")

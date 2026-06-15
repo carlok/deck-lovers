@@ -25,7 +25,17 @@ except ImportError:
     sys.exit(1)
 
 from emoji_img import TwemojiFormat, parse_emoji_mode, substitute_twemoji
-from palette import build_font_head_links, build_root_css, load_palette, parse_font_family, resolve_palette_path
+from palette import (
+    branding_is_active,
+    build_font_head_links,
+    build_root_css,
+    load_branding,
+    load_palette,
+    merge_branding,
+    parse_font_family,
+    parse_logo_on,
+    resolve_palette_path,
+)
 
 SERVER_HOST = os.getenv("SERVER_HOST", "localhost")
 PORT        = os.getenv("PORT", "8000")
@@ -178,12 +188,82 @@ def _md(text: str, *, emoji_mode: TwemojiFormat | None = None) -> str:
 
 # ── Slide parsing ─────────────────────────────────────────────────────────────
 
+_FRONT_MATTER_RE = re.compile(r'^---\n(?!---)(.+?)\n---\n', re.DOTALL)
+
+
+def _parse_front_matter_branding(text: str) -> dict[str, object]:
+    """Parse a minimal YAML branding block from deck front matter."""
+    branding: dict[str, object] = {}
+    in_branding = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if re.match(r"^branding:\s*$", stripped):
+            in_branding = True
+            continue
+        if in_branding:
+            match = re.match(r"^\s{2}(\w+):\s*(.+)$", line)
+            if match:
+                key = match.group(1)
+                value = match.group(2).strip().strip('"').strip("'")
+                branding[key] = value
+            elif not line.startswith((" ", "\t")):
+                break
+    return branding
+
+
+def extract_front_matter(raw: str) -> tuple[dict[str, object], str]:
+    """Return optional branding overrides and markdown body without front matter."""
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+    match = _FRONT_MATTER_RE.match(raw)
+    if not match:
+        return {}, raw
+    branding = _parse_front_matter_branding(match.group(1))
+    return branding, raw[match.end():]
+
+
 def parse_slides(raw: str) -> list[str]:
     raw = raw.replace("\r\n", "\n").replace("\r", "\n")
-    # Strip optional YAML front matter (require at least one non-separator line — I3)
-    raw = re.sub(r'^---\n(?!---).+?\n---\n', '', raw, count=1, flags=re.DOTALL)
     parts = re.split(r'\n[ \t]*---[ \t]*\n', raw)
     return [p.strip() for p in parts if p.strip()]
+
+
+def _slide_shows_logo(
+    branding: dict[str, object],
+    *,
+    is_title: bool,
+    slide_index: int,
+    slide_count: int,
+) -> bool:
+    logo = str(branding.get("logo", "")).strip()
+    if not logo:
+        return False
+    mode = str(branding.get("logo_on", "none")).strip().lower()
+    if mode == "none":
+        return False
+    if mode == "all":
+        return True
+    if mode == "title":
+        return is_title
+    if mode == "content":
+        return not is_title
+    if mode == "content_not_last":
+        return not is_title and slide_index < slide_count - 1
+    return False
+
+
+def _build_slide_chrome(branding: dict[str, object], *, show_logo: bool) -> str:
+    parts = ['<div class="slide-chrome" aria-hidden="true">']
+    if branding.get("frame_top"):
+        parts.append('<div class="slide-chrome-bar slide-chrome-bar-top"></div>')
+    if branding.get("frame_bottom"):
+        parts.append('<div class="slide-chrome-bar slide-chrome-bar-bottom"></div>')
+    if show_logo:
+        src = _esc.escape(str(branding["logo"]), quote=True)
+        parts.append(f'<img class="slide-chrome-logo" src="{src}" alt="">')
+    parts.append("</div>")
+    return "\n    ".join(parts)
 
 def _is_title(md_text: str) -> bool:
     return bool(re.match(r'^#\s', md_text.strip()))
@@ -215,6 +295,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:var(--san
 .slide.prev{opacity:0;transform:translateX(-48px);}
 .slide.title{align-items:center;text-align:center;
   background:linear-gradient(160deg,var(--bg) 0%,var(--title-gradient-mid) 60%,var(--title-gradient-end) 100%);}
+
+/* Optional palette branding — accent bars + corner logo */
+.slide.has-branding{position:relative;}
+.slide-chrome{position:absolute;inset:0;pointer-events:none;z-index:2;}
+.slide-chrome-bar{position:absolute;left:0;right:0;height:var(--frame-bar-height);
+  background:var(--frame-bar-color);}
+.slide-chrome-bar-top{top:0;}
+.slide-chrome-bar-bottom{bottom:0;}
+.slide.has-branding.has-frame-top .slide-chrome-logo{top:calc(var(--frame-bar-height) + 10px);}
+.slide.has-branding:not(.has-frame-top) .slide-chrome-logo{top:12px;}
+.slide.has-branding .slide-inner{position:relative;z-index:1;width:100%;flex:1;
+  display:flex;flex-direction:column;justify-content:center;}
+.slide.has-branding.has-logo .slide-inner{padding-right:min(26vw,240px);}
 
 /* Headings */
 .slide h1{font-size:clamp(2.8rem,6.5vw,5.5rem);font-weight:800;line-height:1.06;
@@ -309,6 +402,14 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
   margin:.45em auto;
   border-radius:10px;
   box-shadow:0 8px 28px rgba(0,0,0,.16);
+}
+/* Corner logo — must follow .slide img (same element) to win the cascade */
+.slide img.slide-chrome-logo{
+  position:absolute;right:5vw;left:auto;
+  height:var(--logo-height);max-height:var(--logo-height);
+  width:auto;max-width:min(22vw,180px);
+  margin:0;border-radius:0;box-shadow:none;
+  object-fit:contain;opacity:.92;
 }
 /* Twemoji / inline icons in titles and body (not full-width slide images) */
 .slide .emoji-img{
@@ -429,6 +530,8 @@ li.liked-flash{animation:li-like .45s ease-out forwards;border-radius:6px;}
     page-break-after:always;break-after:page;
     -webkit-print-color-adjust:exact;print-color-adjust:exact;
   }
+  .slide-chrome{position:absolute!important;inset:0!important;}
+  .slide.has-branding .slide-inner{flex:1!important;width:100%!important;}
   .slide:last-child{page-break-after:avoid;break-after:avoid;}
   .line-hidden{visibility:visible!important;opacity:1!important;}
   .heart{display:none!important;}
@@ -858,27 +961,71 @@ def build_html(
     palette: dict[str, str] | None = None,
     font_family: str | None = None,
     emoji_mode: TwemojiFormat | None = None,
+    branding: dict[str, object] | None = None,
 ) -> str:
     total = len(slide_texts) + (1 if include_stats else 0)
+    slide_count = len(slide_texts)
+    active_branding = branding if branding_is_active(branding) else None
 
     slides_html_parts = []
     for i, raw in enumerate(slide_texts):
-        cls   = "title" if _is_title(raw) else "content"
+        cls = "title" if _is_title(raw) else "content"
         inner = _md(raw, emoji_mode=emoji_mode)
-        slides_html_parts.append(
-            f'  <div class="slide {cls}" data-index="{i}">\n{inner}\n  </div>'
-        )
+        if active_branding:
+            is_title = cls == "title"
+            show_logo = _slide_shows_logo(
+                active_branding,
+                is_title=is_title,
+                slide_index=i,
+                slide_count=slide_count,
+            )
+            extra: list[str] = ["has-branding"]
+            if active_branding.get("frame_top"):
+                extra.append("has-frame-top")
+            if active_branding.get("frame_bottom"):
+                extra.append("has-frame-bottom")
+            if show_logo:
+                extra.append("has-logo")
+            chrome = _build_slide_chrome(active_branding, show_logo=show_logo)
+            slides_html_parts.append(
+                f'  <div class="slide {cls} {" ".join(extra)}" data-index="{i}">\n'
+                f"    {chrome}\n"
+                f"    <div class=\"slide-inner\">\n{inner}\n    </div>\n"
+                f"  </div>"
+            )
+        else:
+            slides_html_parts.append(
+                f'  <div class="slide {cls}" data-index="{i}">\n{inner}\n  </div>'
+            )
 
     # Stats slide (optional, last)
     if include_stats:
         stats_idx = len(slide_texts)
-        slides_html_parts.append(
-            f'  <div class="slide content" id="stats-slide" data-index="{stats_idx}">\n'
-            f'  <h2>Audience Engagement</h2>\n'
-            f'  <div id="stats-chart" class="stats-grid"></div>\n'
-            f'  <p style="margin-top:1.2em;font-size:.8em;color:var(--muted)">top 10 slides · ranked by likes · updates live</p>\n'
-            f'  </div>'
-        )
+        if active_branding:
+            extra = ["has-branding"]
+            if active_branding.get("frame_top"):
+                extra.append("has-frame-top")
+            if active_branding.get("frame_bottom"):
+                extra.append("has-frame-bottom")
+            chrome = _build_slide_chrome(active_branding, show_logo=False)
+            slides_html_parts.append(
+                f'  <div class="slide content {" ".join(extra)}" id="stats-slide" data-index="{stats_idx}">\n'
+                f"    {chrome}\n"
+                f'    <div class="slide-inner">\n'
+                f"  <h2>Audience Engagement</h2>\n"
+                f'  <div id="stats-chart" class="stats-grid"></div>\n'
+                f'  <p style="margin-top:1.2em;font-size:.8em;color:var(--muted)">top 10 slides · ranked by likes · updates live</p>\n'
+                f"    </div>\n"
+                f"  </div>"
+            )
+        else:
+            slides_html_parts.append(
+                f'  <div class="slide content" id="stats-slide" data-index="{stats_idx}">\n'
+                f"  <h2>Audience Engagement</h2>\n"
+                f'  <div id="stats-chart" class="stats-grid"></div>\n'
+                f'  <p style="margin-top:1.2em;font-size:.8em;color:var(--muted)">top 10 slides · ranked by likes · updates live</p>\n'
+                f"  </div>"
+            )
 
     slides_html = "\n".join(slides_html_parts)
 
@@ -891,7 +1038,7 @@ def build_html(
         raise ValueError("pdf_mode must be 'vector' or 'raster'")
 
     colors = palette if palette is not None else load_palette(None)
-    css = _CSS.replace("__ROOT_CSS__", build_root_css(colors, font_family))
+    css = _CSS.replace("__ROOT_CSS__", build_root_css(colors, font_family, active_branding))
     accent = colors["accent"]
     init_scripts = _INIT_SCRIPTS.replace("__ACCENT__", accent)
 
@@ -1047,6 +1194,24 @@ def main() -> None:
         metavar="MODE",
         help="Emoji rendering: twemoji/svg (CDN SVG images), png, or off/native (default).",
     )
+    p.add_argument(
+        "--logo",
+        default=os.getenv("LOGO", ""),
+        metavar="PATH",
+        help="Override palette logo path (relative to slides.html, e.g. img/logo.png).",
+    )
+    p.add_argument(
+        "--no-frame",
+        action="store_true",
+        default=os.getenv("FRAME", "").strip().lower() in {"off", "0", "false", "no"},
+        help="Disable top/bottom accent bars even when the palette defines them (FRAME=off).",
+    )
+    p.add_argument(
+        "--logo-on",
+        default=os.getenv("LOGO_ON", ""),
+        metavar="MODE",
+        help="Logo visibility: all, title, content, none, content_not_last (overrides palette).",
+    )
     args = p.parse_args()
 
     apply_endpoint_config(
@@ -1075,13 +1240,20 @@ def main() -> None:
         sys.exit(1)
 
     try:
+        logo_on_override = parse_logo_on(args.logo_on or None)
+    except ValueError as exc:
+        print(f"ERROR: logo-on: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
         with open(args.input, encoding="utf-8") as f:   # M1: context manager
             raw = f.read()
     except FileNotFoundError:
         print(f"ERROR: {args.input} not found", file=sys.stderr)
         sys.exit(1)
 
-    slide_texts = parse_slides(raw)
+    fm_overrides, body = extract_front_matter(raw)
+    slide_texts = parse_slides(body)
     if not slide_texts:
         print("ERROR: no slides found (are they separated by ---?)", file=sys.stderr)
         sys.exit(1)
@@ -1107,6 +1279,32 @@ def main() -> None:
     emoji_label = f"twemoji ({emoji_mode})" if emoji_mode else "native (default)"
     print(f"[md2html] Emoji: {emoji_label}")
 
+    cli_branding: dict[str, object] = {}
+    if args.logo.strip():
+        cli_branding["logo"] = args.logo.strip()
+    if args.no_frame:
+        cli_branding["frame_top"] = False
+        cli_branding["frame_bottom"] = False
+    if logo_on_override:
+        cli_branding["logo_on"] = logo_on_override
+
+    try:
+        branding = merge_branding(
+            load_branding(palette_path),
+            fm_overrides or None,
+            cli_branding or None,
+        )
+    except ValueError as exc:
+        print(f"ERROR: branding: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if branding_is_active(branding):
+        print(
+            f"[md2html] Branding: frame_top={branding['frame_top']} "
+            f"frame_bottom={branding['frame_bottom']} logo_on={branding['logo_on']}"
+            + (f" logo={branding['logo']}" if branding.get("logo") else "")
+        )
+
     html = build_html(
         slide_texts,
         doc_title=args.title,
@@ -1119,6 +1317,7 @@ def main() -> None:
         palette=palette,
         font_family=font_family,
         emoji_mode=emoji_mode,
+        branding=branding,
     )
 
     with open(args.output, "w", encoding="utf-8") as f:  # M1: context manager

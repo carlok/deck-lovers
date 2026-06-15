@@ -11,6 +11,7 @@ import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
 INDIGO_PALETTE = FIXTURES / "indigo-palette.json"
+BRANDED_PALETTE = FIXTURES / "branded-palette.json"
 
 # Ensure env vars are set before import so build_html picks them up
 os.environ.setdefault("SERVER_HOST", "localhost")
@@ -44,6 +45,26 @@ class TestParseSlides:
     def test_empty_input_returns_empty(self):
         slides = md2html.parse_slides("")
         assert slides == [] or all(not s.strip() for s in slides)
+
+
+# ── extract_front_matter ─────────────────────────────────────────────────────
+
+class TestExtractFrontMatter:
+    def test_no_front_matter(self):
+        overrides, body = md2html.extract_front_matter("## Hi\n\nBody")
+        assert overrides == {}
+        assert body.startswith("## Hi")
+
+    def test_branding_logo_on_override(self):
+        raw = "---\nbranding:\n  logo_on: title\n---\n## Slide\n\nBody"
+        overrides, body = md2html.extract_front_matter(raw)
+        assert overrides["logo_on"] == "title"
+        assert body.startswith("## Slide")
+
+    def test_parse_slides_after_front_matter(self):
+        raw = "---\nbranding:\n  logo_on: none\n---\n## One\n\nA\n---\n## Two\n\nB"
+        _, body = md2html.extract_front_matter(raw)
+        assert len(md2html.parse_slides(body)) == 2
 
 
 # ── _slide_title ─────────────────────────────────────────────────────────────
@@ -296,6 +317,72 @@ class TestBuildHtml:
         assert ".slide img{" in html
 
 
+# ── slide branding ────────────────────────────────────────────────────────────
+
+class TestSlideBranding:
+    def test_no_chrome_without_branding(self):
+        from palette import merge_branding
+
+        html = md2html.build_html(
+            ["## A\n\nbody"],
+            branding=merge_branding(),
+            include_stats=False,
+        )
+        assert 'class="slide-chrome"' not in html
+        assert " has-branding" not in html
+
+    def test_chrome_and_logo_on_content_slides(self):
+        from palette import load_branding
+
+        branding = load_branding(BRANDED_PALETTE)
+        html = md2html.build_html(
+            ["# Title\n\nsub", "## Content\n\nbody"],
+            branding=branding,
+            include_stats=False,
+        )
+        assert "slide-chrome-bar-top" in html
+        assert "slide-chrome-bar-bottom" in html
+        assert '<img class="slide-chrome-logo"' in html
+        assert " has-branding" in html
+
+    def test_logo_on_content_not_last_hides_last_content_logo(self):
+        from palette import merge_branding, load_branding
+
+        branding = merge_branding(
+            load_branding(BRANDED_PALETTE),
+            {"logo_on": "content_not_last"},
+        )
+        slides = ["# T\n\ns", "## A\n\n1", "## B\n\n2"]
+        html = md2html.build_html(slides, branding=branding, include_stats=False)
+        assert html.count('<img class="slide-chrome-logo"') == 1
+
+    def test_print_css_includes_chrome(self):
+        from palette import load_branding
+
+        branding = load_branding(BRANDED_PALETTE)
+        html = md2html.build_html(
+            ["## A\n\nb"],
+            branding=branding,
+            include_stats=False,
+        )
+        assert ".slide-chrome{position:absolute" in html.replace(" ", "")
+
+    def test_chrome_logo_css_overrides_slide_img(self):
+        from palette import load_branding
+
+        branding = load_branding(BRANDED_PALETTE)
+        html = md2html.build_html(
+            ["## A\n\nb"],
+            branding=branding,
+            include_stats=False,
+        )
+        assert ".slide img.slide-chrome-logo{" in html
+        assert html.index(".slide img.slide-chrome-logo{") > html.index(".slide img{")
+        compact = html.replace(" ", "")
+        assert "max-height:var(--logo-height)" in compact
+        assert "right:5vw" in compact
+
+
 # ── WebSocket / QR URL tokens ─────────────────────────────────────────────────
 
 class TestEnvTokens:
@@ -529,6 +616,41 @@ class TestMain:
         content = out_file.read_text(encoding="utf-8")
         assert 'class="emoji-img"' in content
         assert "/svg/1f9f5.svg" in content
+
+    def test_cli_no_frame_disables_bars(self, tmp_path, monkeypatch):
+        import sys
+
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("## One\n\nHello", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", [
+            "md2html.py",
+            "--input", str(md_file),
+            "--output", str(out_file),
+            "--palette", str(BRANDED_PALETTE),
+            "--no-frame",
+        ])
+        md2html.main()
+        html = out_file.read_text(encoding="utf-8")
+        assert '<div class="slide-chrome-bar slide-chrome-bar-top">' not in html
+        assert '<div class="slide-chrome-bar slide-chrome-bar-bottom">' not in html
+
+    def test_cli_logo_on_override(self, tmp_path, monkeypatch):
+        import sys
+
+        md_file = tmp_path / "slides.md"
+        out_file = tmp_path / "out.html"
+        md_file.write_text("# Title\n\nsub\n---\n## Body\n\ncontent", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", [
+            "md2html.py",
+            "--input", str(md_file),
+            "--output", str(out_file),
+            "--palette", str(BRANDED_PALETTE),
+            "--logo-on", "title",
+        ])
+        md2html.main()
+        html = out_file.read_text(encoding="utf-8")
+        assert html.count('<img class="slide-chrome-logo"') == 1
 
     def test_cli_pdf_quality_invalid_exits(self, tmp_path, monkeypatch):
         import sys

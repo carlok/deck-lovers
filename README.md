@@ -251,6 +251,14 @@ PDF_MODE=vector ./deploy.sh --pdf-only
 ./deploy.sh --emoji twemoji --convert-only --slides-file tmp/deck.md
 FONT="Open Sans" ./deploy.sh --convert-only
 
+# Branded deck: accent bars + corner logo (from palette JSON; see § Extending)
+cp img/OctopusLab-Colored-NoPayoff.png output/img/   # once per machine
+./deploy.sh --pdf-only --slides-file tmp/ol-cd-2.md --no-qr --no-stats \
+  --palette octopuslab --font Montserrat --emoji twemoji
+# Override logo path or visibility without editing the palette:
+./deploy.sh --palette octopuslab --logo img/custom.png --logo-on content_not_last
+FRAME=off ./deploy.sh --convert-only --palette octopuslab   # bars off, logo unchanged
+
 # Override runtime or hostname
 COMPOSE="podman compose" SERVER_HOST=192.168.0.106 ./deploy.sh
 
@@ -352,7 +360,7 @@ All test suites run in containers and write coverage reports to `test-results/`.
 ./run_tests.sh
 
 # Single suite
-./run_tests.sh converter      # md2html + palette (pytest --cov)
+./run_tests.sh converter      # md2html + palette + emoji_img (pytest --cov)
 ./run_tests.sh server
 ./run_tests.sh converter-js
 ./run_tests.sh server-js
@@ -361,6 +369,12 @@ All test suites run in containers and write coverage reports to `test-results/`.
 ./run_tests.sh py
 ./run_tests.sh js
 ```
+
+**Converter suite** (as of last run): **118 tests**, **~92% line coverage** on `md2html`, `palette`, and `emoji_img`. Branding is covered by:
+
+- `converter/tests/test_palette.py` — `load_branding`, `merge_branding`, CSS vars, validation
+- `converter/tests/test_md2html.py` — chrome HTML, `logo_on` modes, front matter, CLI `--logo` / `--no-frame` / `--logo-on`
+- `converter/tests/fixtures/branded-palette.json` — palette fixture used in tests
 
 Equivalent `podman compose` commands (profile `test`):
 
@@ -373,10 +387,12 @@ podman compose run --rm --remove-orphans test-server-js
 
 Coverage output folders:
 
-- `test-results/converter` — Python (`md2html`, `palette`); open `index.html`
+- `test-results/converter` — Python (`md2html`, `palette`, `emoji_img`); open `index.html`
 - `test-results/server`
 - `test-results/converter-js`
 - `test-results/server-js`
+
+Re-run `./run_tests.sh converter` after changing palette branding or slide chrome CSS.
 
 ---
 
@@ -628,7 +644,7 @@ Slide colors are driven by CSS variables baked at convert time. Pass a palette *
 PALETTE=default ./deploy.sh --convert-only
 ```
 
-Shipped palette: `palettes/default.json` (warm cream + coral accent). Add your own files under `palettes/` — keys you omit inherit from the built-in defaults in `converter/palette.py`.
+Shipped palettes: `palettes/default.json` (warm cream + coral accent) and `palettes/octopuslab.json` (indigo + optional `branding` block with frame bars and corner logo). Add your own files under `palettes/` — keys you omit inherit from the built-in defaults in `converter/palette.py`.
 
 | Key | Role |
 |-----|------|
@@ -655,6 +671,64 @@ Example custom palette:
 ```
 
 Re-run conversion after editing a palette (`./deploy.sh --convert-only` or full `./deploy.sh`).
+
+### Slide branding (frame bars + logo)
+
+Palettes may include an optional `branding` block for accent bars and a corner logo, injected at convert time into every slide (and into vector PDF export via the same CSS).
+
+```json
+{
+  "name": "my-brand",
+  "colors": { "accent": "#425EC9", "bg": "#FFFFFF" },
+  "branding": {
+    "frame_top": true,
+    "frame_bottom": true,
+    "frame_height": "5px",
+    "frame_color": "accent",
+    "logo": "img/logo.png",
+    "logo_height": "40px",
+    "logo_position": "top-right",
+    "logo_on": "content_not_last"
+  }
+}
+```
+
+| Field | Purpose |
+|-------|---------|
+| `frame_top` / `frame_bottom` | Toggle horizontal accent bars |
+| `frame_height` | Bar thickness (CSS length, e.g. `5px`) |
+| `frame_color` | `accent`, `dark`, or `#hex` |
+| `logo` | Path relative to `output/slides.html` (same as markdown images) |
+| `logo_height` | Max height for the corner mark |
+| `logo_on` | `all`, `title`, `content`, `none`, or `content_not_last` |
+
+Omit `branding` entirely for decks with no frame or logo (backward compatible).
+
+**Overrides** (most specific wins): palette JSON → optional YAML front matter in the deck → CLI/env.
+
+```yaml
+---
+branding:
+  logo_on: content_not_last
+---
+```
+
+```bash
+./deploy.sh --palette octopuslab --logo img/custom.png --logo-on content
+FRAME=off ./deploy.sh --convert-only --palette octopuslab   # bars off, logo unchanged
+LOGO_ON=content_not_last LOGO=img/logo.svg ./deploy.sh --convert-only --palette octopuslab
+```
+
+**Full branded export** (Octopus Lab palette — bars on all slides, corner logo on content slides except the last):
+
+```bash
+mkdir -p output/img
+cp path/to/OctopusLab-Colored-NoPayoff.png output/img/
+./deploy.sh --pdf-only --slides-file tmp/ol-cd-2.md --no-qr --no-stats \
+  --palette octopuslab --font Montserrat --emoji twemoji
+```
+
+Place logo files under `output/img/` before convert/PDF (paths are resolved from `output/slides.html`). Set `logo_height` in the palette (e.g. `"40px"`) to control corner logo size; the logo is pinned top-right and does not use the full-slide image layout.
 
 ### Slide fonts
 

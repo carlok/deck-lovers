@@ -39,6 +39,9 @@ services:
       - PALETTE=${PALETTE:-}
       - FONT=${FONT:-}
       - EMOJI=${EMOJI:-}
+      - LOGO=${LOGO:-}
+      - FRAME=${FRAME:-}
+      - LOGO_ON=${LOGO_ON:-}
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     profiles: ["convert"]

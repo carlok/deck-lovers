@@ -1,0 +1,31 @@
+{
+  "name": "branded-test",
+  "colors": {
+    "accent": "#425EC9",
+    "accent-hover": "#324AA3",
+    "success": "#00AB62",
+    "warning": "#EF6C34",
+    "dark": "#0B1830",
+    "text": "#0B1830",
+    "muted": "#475066",
+    "bg": "#FFFFFF",
+    "bg-cream": "#FFFFFF",
+    "border": "#E2E8F0",
+    "link": "#425EC9",
+    "pre-text": "#DDE2F5",
+    "table-stripe": "#F8FAFC",
+    "table-hover": "#EEF2FF",
+    "title-gradient-mid": "#FFFFFF",
+    "title-gradient-end": "#F4F7FF"
+  },
+  "branding": {
+    "frame_top": true,
+    "frame_bottom": true,
+    "frame_height": "5px",
+    "frame_color": "accent",
+    "logo": "img/test-logo.png",
+    "logo_height": "40px",
+    "logo_position": "top-right",
+    "logo_on": "content"
+  }
+}
