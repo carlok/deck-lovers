@@ -6,11 +6,11 @@ WORKDIR /app
 # with the host is the only thing that matters (handled by convert.sh / --setup).
 # Non-root is enforced on the long-running server container instead.
 
-COPY requirements.txt .
+COPY converter/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY tex_extract.py .
-COPY md2html.py .
+COPY converter/tex_extract.py converter/md2html.py converter/palette.py ./
+COPY palettes/ ./palettes/
 
 CMD ["python", "md2html.py", \
      "--input",  "/workspace/slides.md", \

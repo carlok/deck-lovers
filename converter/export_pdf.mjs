@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/** Server-side PDF export — vector (Chromium print) by default, raster optional. */
 
 import fs from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
@@ -10,6 +11,7 @@ const outputPdf = process.argv[3] ?? "/workspace/slides.pdf";
 const downloadDir = "/workspace";
 const downloadedPdf = `${downloadDir}/slides.pdf`;
 const chromePath = process.env.CHROME_BIN ?? "/usr/bin/chromium";
+const pdfMode = (process.env.PDF_MODE ?? "vector").toLowerCase();
 
 const toFileUrl = (path) => (path.startsWith("file://") ? path : pathToFileURL(path).href);
 const printUrl = `${toFileUrl(inputHtml)}#print`;
@@ -35,24 +37,35 @@ const browser = await puppeteer.launch({
 
 try {
   const page = await browser.newPage();
-  await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 2 });
+  await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
 
-  const client = await page.target().createCDPSession();
-  await client.send("Page.setDownloadBehavior", {
-    behavior: "allow",
-    downloadPath: downloadDir,
-  });
-
-  try {
-    await fs.unlink(downloadedPdf);
-  } catch {}
-
+  console.log(`[pdf] Mode: ${pdfMode}`);
   console.log(`[pdf] Navigating: ${printUrl}`);
   await page.goto(printUrl, { waitUntil: "networkidle0", timeout: 120000 });
-  await waitForFile(downloadedPdf, 120000);
 
-  if (downloadedPdf !== outputPdf) {
-    await fs.copyFile(downloadedPdf, outputPdf);
+  if (pdfMode === "raster") {
+    const client = await page.target().createCDPSession();
+    await client.send("Page.setDownloadBehavior", {
+      behavior: "allow",
+      downloadPath: downloadDir,
+    });
+    try {
+      await fs.unlink(downloadedPdf);
+    } catch {}
+    await waitForFile(downloadedPdf, 180000);
+    if (downloadedPdf !== outputPdf) {
+      await fs.copyFile(downloadedPdf, outputPdf);
+    }
+  } else {
+    await page.waitForFunction(() => window.__DECK_PRINT_READY__ === true, {
+      timeout: 180000,
+    });
+    await page.pdf({
+      path: outputPdf,
+      printBackground: true,
+      preferCSSPageSize: true,
+      margin: { top: 0, right: 0, bottom: 0, left: 0 },
+    });
   }
 
   console.log(`[pdf] Generated: ${outputPdf}`);

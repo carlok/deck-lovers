@@ -235,6 +235,15 @@ PORT=9000 ./deploy.sh
 # If using Cloudflare tunnel, point it at the same port:
 #   cloudflared tunnel --url http://localhost:9000
 
+# Color palette (built-in name or JSON path). Shipped: default
+./deploy.sh --palette default
+./deploy.sh --palette palettes/my-brand.json
+PALETTE=default ./deploy.sh --convert-only
+
+# PDF export mode: vector (default, text + links) or raster (JPEG screenshots)
+./deploy.sh --pdf-only --pdf-mode vector
+PDF_MODE=vector ./deploy.sh --pdf-only
+
 # Override runtime or hostname
 COMPOSE="podman compose" SERVER_HOST=192.168.0.106 ./deploy.sh
 
@@ -244,9 +253,9 @@ VPS_PORT=2222 VPS=root@YOUR_SERVER_IP ./deploy.sh
 # High-quality PDF from a custom deck, no QR, no stats slide
 ./deploy.sh --pdf-only --slides-file tmp/cottonia_slides2.md --no-qr --no-stats
 
-# Smaller PDF (JPEG quality; default 0.92). Decks are rasterized at 16:9 — not vector text.
-./deploy.sh --pdf-only --slides-file tmp/deck.md --no-qr --no-stats --pdf-quality 0.82
-# Same via env:  PDF_QUALITY=0.85 ./deploy.sh --pdf-only …
+# Smaller raster PDF (JPEG quality; default export is vector text + links).
+./deploy.sh --pdf-only --slides-file tmp/deck.md --no-qr --no-stats --pdf-mode raster --pdf-quality 0.82
+# Same via env:  PDF_QUALITY=0.85 PDF_MODE=raster ./deploy.sh --pdf-only …
 ```
 
 ### Rebuild images after code changes
@@ -297,7 +306,14 @@ output/
 └── slides.pdf         ← server-side generated PDF (`--pdf-only`)
 ```
 
-PDF export captures each slide as a high-resolution **JPEG inside the PDF** so file size stays modest while previews stay crisp. Older builds used uncompressed PNG snapshots, which could reach hundreds of MB; lowering `--pdf-quality` (for example `0.78–0.85`) reduces size further if you mainly have text slides.
+PDF export uses **Chromium vector print** by default: selectable text and clickable links, one 16:9 slide per page. Use `--pdf-mode raster` for the legacy JPEG-screenshot path (supports `--pdf-quality`).
+
+| Mode | Command | Output |
+|------|---------|--------|
+| **vector** (default) | `./deploy.sh --pdf-only` | Text, links, smaller files |
+| raster | `./deploy.sh --pdf-only --pdf-mode raster --pdf-quality 0.82` | Flat JPEG pages per slide |
+
+Set `PDF_MODE=vector` or `PDF_MODE=raster` in `.env` to change the default for `deploy.sh` and the `pdf` container.
 
 `slides.html` is fully self-contained — open it with `file://` for offline use,
 or serve it via the FastAPI server for live audience features.
@@ -325,28 +341,32 @@ Recommended style is `img/...` because it stays clean and portable in Markdown s
 All test suites run in containers and write coverage reports to `test-results/`.
 
 ```bash
-# Python: converter
+# All four suites (Python + Jest, with coverage)
+./run_tests.sh
+
+# Single suite
+./run_tests.sh converter      # md2html + palette (pytest --cov)
+./run_tests.sh server
+./run_tests.sh converter-js
+./run_tests.sh server-js
+
+# Both Python or both JS
+./run_tests.sh py
+./run_tests.sh js
+```
+
+Equivalent `podman compose` commands (profile `test`):
+
+```bash
 podman compose run --rm --remove-orphans test-converter
-
-# Python: server
 podman compose run --rm --remove-orphans test-server
-
-# JavaScript: converter
 podman compose run --rm --remove-orphans test-converter-js
-
-# JavaScript: server
-podman compose run --rm --remove-orphans test-server-js
-
-# Run all suites
-podman compose run --rm --remove-orphans test-converter && \
-podman compose run --rm --remove-orphans test-server && \
-podman compose run --rm --remove-orphans test-converter-js && \
 podman compose run --rm --remove-orphans test-server-js
 ```
 
 Coverage output folders:
 
-- `test-results/converter`
+- `test-results/converter` — Python (`md2html`, `palette`); open `index.html`
 - `test-results/server`
 - `test-results/converter-js`
 - `test-results/server-js`
@@ -491,6 +511,8 @@ python converter/md2html.py \
   --output output/slides.html \
   --server-host localhost \
   --port 8000 \
+  --palette palettes/default.json \
+  --pdf-mode vector \
   --qr off   # optional: hide QR overlay
 
 # Serve (match PORT above)
@@ -586,6 +608,45 @@ def load_likes():
     if LIKES_FILE.exists():
         likes = {int(k): v for k, v in json.loads(LIKES_FILE.read_text()).items()}
 ```
+
+### Color palettes
+
+Slide colors are driven by CSS variables baked at convert time. Pass a palette **name** (looks up `palettes/<name>.json`) or a path to any JSON file:
+
+```bash
+./deploy.sh --palette default
+./deploy.sh --palette palettes/default.json
+./deploy.sh --palette /path/to/my-brand.json
+PALETTE=default ./deploy.sh --convert-only
+```
+
+Shipped palette: `palettes/default.json` (warm cream + coral accent). Add your own files under `palettes/` — keys you omit inherit from the built-in defaults in `converter/palette.py`.
+
+| Key | Role |
+|-----|------|
+| `accent`, `accent-hover` | Buttons, progress bar, highlights |
+| `dark`, `text`, `muted` | Typography |
+| `bg`, `bg-cream` | Slide surfaces (use `#FFFFFF` for white slides) |
+| `border`, `link` | Tables, links |
+| `pre-text`, `table-stripe`, `table-hover` | Code blocks, tables |
+| `title-gradient-mid`, `title-gradient-end` | Title slide gradient |
+| `success`, `warning` | Checklists, stats bar |
+
+Example custom palette:
+
+```json
+{
+  "name": "my-brand",
+  "colors": {
+    "accent": "#425EC9",
+    "bg": "#FFFFFF",
+    "bg-cream": "#FFFFFF",
+    "text": "#0B1830"
+  }
+}
+```
+
+Re-run conversion after editing a palette (`./deploy.sh --convert-only` or full `./deploy.sh`).
 
 ### Custom slide backgrounds
 

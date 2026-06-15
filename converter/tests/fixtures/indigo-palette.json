@@ -1,0 +1,12 @@
+{
+  "name": "indigo-fixture",
+  "description": "Test fixture — indigo accent for palette unit tests.",
+  "colors": {
+    "accent": "#425EC9",
+    "accent-hover": "#324AA3",
+    "dark": "#0B1830",
+    "text": "#0B1830",
+    "bg": "#DEEFFF",
+    "bg-cream": "#F4F7FF"
+  }
+}

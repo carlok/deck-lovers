@@ -14,6 +14,7 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 
 try:
     import markdown
@@ -22,6 +23,8 @@ try:
 except ImportError:
     print("ERROR: pip install markdown", file=sys.stderr)
     sys.exit(1)
+
+from palette import build_root_css, load_palette, resolve_palette_path
 
 SERVER_HOST = os.getenv("SERVER_HOST", "localhost")
 PORT        = os.getenv("PORT", "8000")
@@ -71,8 +74,9 @@ def _yt_block(title: str, url: str) -> str:
     if not vid:                                   # C2: skip invalid IDs entirely
         return f'<p><em>Invalid YouTube URL: {_esc.escape(url)}</em></p>'
     label = _esc.escape(title or "Video")
+    watch = _esc.escape(f"https://www.youtube.com/watch?v={vid}")
     return (
-        f'<div class="yt-wrap">'
+        f'<div class="yt-wrap" data-yt-url="{watch}">'
         f'<iframe src="https://www.youtube.com/embed/{vid}" '
         f'title="{label}" allowfullscreen loading="lazy"></iframe>'
         f'</div>'
@@ -189,14 +193,7 @@ def _slide_title(md_text: str) -> str:
 
 _CSS = """\
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --accent:#E94560;--success:#2ECC71;--warning:#F39C12;
-  --dark:#1A2333;--text:#2C3E50;--muted:#7F8C8D;
-  --bg:#FAFAF8;--bg-cream:#FFF9F0;--border:#E8E4DF;--link:#3498DB;
-  --mono:"SF Mono","Fira Code","Consolas",monospace;
-  --sans:system-ui,-apple-system,"Segoe UI","Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif;
-  --ease:cubic-bezier(.4,0,.2,1);--dur:360ms;
-}
+__ROOT_CSS__
 html,body{height:100%;overflow:hidden;background:var(--bg);font-family:var(--sans);
   color:var(--text);-webkit-font-smoothing:antialiased;}
 
@@ -214,7 +211,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:var(--san
 .slide.active{opacity:1;transform:translateX(0);pointer-events:auto;z-index:1;}
 .slide.prev{opacity:0;transform:translateX(-48px);}
 .slide.title{align-items:center;text-align:center;
-  background:linear-gradient(160deg,#fff 0%,#FFF0F3 60%,#FFF8EC 100%);}
+  background:linear-gradient(160deg,var(--bg) 0%,var(--title-gradient-mid) 60%,var(--title-gradient-end) 100%);}
 
 /* Headings */
 .slide h1{font-size:clamp(2.8rem,6.5vw,5.5rem);font-weight:800;line-height:1.06;
@@ -232,7 +229,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:var(--san
 .slide.title p{font-size:clamp(1.2rem,2.4vw,1.8rem);color:var(--muted);}
 .slide strong{color:var(--accent);font-weight:700;}
 .slide em{font-style:italic;color:var(--muted);}
-.slide a{color:var(--link);text-decoration:none;border-bottom:1px solid rgba(52,152,219,.3);
+.slide a{color:var(--link);text-decoration:none;border-bottom:1px solid var(--link-30);
   transition:color .15s,border-color .15s;}
 .slide a:hover{color:var(--accent);border-color:var(--accent);}
 
@@ -259,10 +256,10 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
 /* Code */
 .slide :not(pre)>code{font-family:var(--mono);font-size:.87em;background:var(--bg-cream);
   padding:.14em .38em;border-radius:4px;border:1px solid var(--border);color:var(--accent);}
-.slide pre{background:#1A2333;border-radius:10px;padding:1em 1.4em;overflow-x:auto;
+.slide pre{background:var(--dark);border-radius:10px;padding:1em 1.4em;overflow-x:auto;
   margin:.45em 0;box-shadow:0 4px 20px rgba(0,0,0,.14);}
 .slide pre code{font-family:var(--mono);font-size:clamp(.85rem,1.5vw,1.1rem);
-  color:#CBD5E1;line-height:1.6;background:none;border:none;padding:0;}
+  color:var(--pre-text);line-height:1.6;background:none;border:none;padding:0;}
 /* highlight.js — prevent theme overriding our pre background */
 .slide pre code.hljs{background:none!important;padding:0!important;}
 
@@ -277,8 +274,8 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
 .slide thead th{background:var(--dark);color:#fff;padding:.55em .9em;text-align:left;
   font-weight:600;letter-spacing:.03em;}
 .slide tbody tr:nth-child(odd){background:#fff;}
-.slide tbody tr:nth-child(even){background:#F7F5F2;}
-.slide tbody tr:hover{background:#FFF0F2;}
+.slide tbody tr:nth-child(even){background:var(--table-stripe);}
+.slide tbody tr:hover{background:var(--table-hover);}
 .slide tbody td{padding:.5em .9em;border-bottom:1px solid var(--border);vertical-align:top;}
 
 /* Icon link grid — contact / links slide */
@@ -318,14 +315,14 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
 .stats-label{width:190px;text-align:right;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;flex-shrink:0;color:var(--text);}
 .stats-bar-bg{flex:1;background:#EEE;border-radius:6px;height:26px;overflow:hidden;}
-.stats-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#F39C12);
+.stats-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--warning));
   border-radius:6px;transition:width .75s var(--ease);display:flex;align-items:center;
   padding-left:8px;color:#fff;font-weight:700;font-size:.82em;white-space:nowrap;box-sizing:border-box;}
 
 /* Nav */
 #nav{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;
   display:flex;align-items:center;gap:12px;
-  background:rgba(26,35,51,.88);backdrop-filter:blur(14px);
+  background:var(--nav-bg);backdrop-filter:blur(14px);
   padding:8px 20px;border-radius:50px;box-shadow:0 4px 24px rgba(0,0,0,.22);user-select:none;}
 #nav button{background:none;border:none;color:rgba(255,255,255,.6);font-size:1.1rem;
   cursor:pointer;padding:4px 10px;border-radius:8px;transition:color .14s,background .14s;line-height:1;}
@@ -336,7 +333,7 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
 
 /* QR */
 #qr-overlay{position:fixed;bottom:24px;left:24px;z-index:200;
-  background:rgba(26,35,51,.9);padding:10px 10px 6px;border-radius:14px;
+  background:var(--qr-bg);padding:10px 10px 6px;border-radius:14px;
   box-shadow:0 6px 24px rgba(0,0,0,.24);backdrop-filter:blur(10px);
   text-align:center;cursor:pointer;transition:transform .2s var(--ease),box-shadow .2s;}
 #qr-overlay:hover{transform:scale(1.06);box-shadow:0 10px 32px rgba(0,0,0,.3);}
@@ -349,10 +346,10 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
   display:flex;align-items:flex-start;}
 #sidebar-toggle{background:var(--accent);color:#fff;border:none;border-radius:8px 0 0 8px;
   width:34px;height:42px;cursor:pointer;font-size:.9rem;display:flex;align-items:center;
-  justify-content:center;box-shadow:-3px 0 14px rgba(233,69,96,.32);
+  justify-content:center;box-shadow:-3px 0 14px var(--accent-shadow);
   transition:background .14s;flex-direction:column;gap:0;}
-#sidebar-toggle:hover{background:#C73E54;}
-#sidebar-content{background:rgba(26,35,51,.94);backdrop-filter:blur(14px);
+#sidebar-toggle:hover{background:var(--accent-hover);}
+#sidebar-content{background:var(--sidebar-bg);backdrop-filter:blur(14px);
   border-radius:8px 0 0 8px;padding:10px 10px;width:128px;overflow:hidden;
   transition:width .3s var(--ease),padding .3s var(--ease),opacity .3s var(--ease);}
 #sidebar-content.hidden{width:0;padding:0;opacity:0;pointer-events:none;}
@@ -364,13 +361,13 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
   margin-bottom:7px;letter-spacing:.06em;}
 #like-feed{display:flex;flex-direction:column;gap:3px;overflow:hidden;max-height:92px;}
 .like-entry{color:rgba(255,255,255,.85);font-size:.6rem;padding:2px 6px;border-radius:20px;
-  background:rgba(233,69,96,.22);animation:slide-in-r .28s var(--ease);
+  background:var(--accent-22);animation:slide-in-r .28s var(--ease);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 @keyframes slide-in-r{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 
 /* Bullet like flash (mirror mode) */
 @keyframes li-like{
-  0%  {background:rgba(233,69,96,.22);transform:translateX(5px);}
+  0%  {background:var(--accent-22);transform:translateX(5px);}
   100%{background:transparent;transform:translateX(0);}
 }
 li.liked-flash{animation:li-like .45s ease-out forwards;border-radius:6px;}
@@ -398,7 +395,32 @@ li.liked-flash{animation:li-like .45s ease-out forwards;border-radius:6px;}
   #qr-overlay,#like-sidebar{display:none;}
 }
 
-/* @media print removed — PDF is generated via html2canvas+jsPDF screenshots */
+/* Vector PDF / browser print — one 16:9 slide per page, selectable text + links */
+@media print{
+  @page{size:1280px 720px;margin:0;}
+  html,body{height:auto;overflow:visible;background:var(--bg);}
+  #progress,#nav,#qr-overlay,#like-sidebar,#reconnect{display:none!important;}
+  #deck{position:static;inset:auto;height:auto;overflow:visible;}
+  .slide{
+    position:relative!important;inset:auto!important;
+    opacity:1!important;transform:none!important;pointer-events:auto!important;
+    display:flex!important;flex-direction:column!important;
+    justify-content:center!important;
+    width:1280px!important;height:720px!important;
+    max-height:720px!important;overflow:hidden!important;
+    padding:2vh 5vw 7vh!important;
+    page-break-after:always;break-after:page;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+  .slide:last-child{page-break-after:avoid;break-after:avoid;}
+  .line-hidden{visibility:visible!important;opacity:1!important;}
+  .heart{display:none!important;}
+  .yt-wrap iframe{display:none!important;}
+  .yt-wrap::after{
+    content:attr(data-yt-url);display:block;font-size:.9rem;color:var(--link);
+    padding:.5em 0;word-break:break-all;
+  }
+}
 """
 
 # JS uses __TOKENS__ replaced in Python (avoids escaping all JS { } as {{ }})
@@ -414,6 +436,7 @@ var LINE_REVEAL=__LINE_REVEAL__;
 var SHOW_QR=__SHOW_QR__;
 var SHOW_LIKES=__SHOW_LIKES__;
 var PDF_JPEG_QUALITY=__PDF_JPEG_QUALITY__;
+var PDF_MODE='__PDF_MODE__';
 var MIRROR=location.hash==='#mirror';
 var PRINT=location.hash==='#print';
 var current=0;
@@ -659,54 +682,82 @@ function connect(){
 }
 
 if(PRINT){
-  // PDF mode: screenshot every slide with html2canvas, combine via jsPDF
-  ['nav','qr-overlay','like-sidebar','progress','reconnect'].forEach(function(id){
-    var el=document.getElementById(id);if(el)el.style.display='none';
-  });
-  // Stack all slides at 1280×720 for capture
-  document.getElementById('deck').style.cssText='position:static;height:auto;overflow:visible;';
-  slides.forEach(function(s){
-    s.style.cssText='position:relative!important;opacity:1!important;transform:none!important;'
-      +'display:flex!important;width:1280px!important;height:720px!important;overflow:hidden;margin-bottom:8px;';
-  });
-  // Progress overlay
-  var _ov=document.createElement('div');
-  _ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.82);color:#fff;'
-    +'display:flex;flex-direction:column;align-items:center;justify-content:center;'
-    +'z-index:99999;font-family:sans-serif;gap:12px;';
-  _ov.innerHTML='<div style="font-size:1.4rem;font-weight:600">Generating PDF\u2026</div>'
-    +'<div id="_pdf_st" style="font-size:.95rem;opacity:.75">Loading libraries\u2026</div>'
-    +'<div id="_pdf_bar_wrap" style="width:260px;height:6px;background:rgba(255,255,255,.2);border-radius:3px">'
-    +'<div id="_pdf_bar" style="height:6px;background:#4a9eff;border-radius:3px;width:0;transition:width .2s"></div></div>';
-  document.body.appendChild(_ov);
-  function _loadScript(src,cb){var s=document.createElement('script');s.src=src;s.onload=cb;document.head.appendChild(s);}
+  function waitForDeckRender(){
+    var mj=window.MathJax;
+    var mjReady=!mj||!mj.startup||!mj.startup.promise?Promise.resolve():mj.startup.promise;
+    return mjReady.then(function(){
+      return new Promise(function(resolve){
+        function pendingDots(){
+          return document.querySelectorAll('pre code.language-dot').length;
+        }
+        function tick(){
+          if(!pendingDots()){resolve();return;}
+          setTimeout(tick,150);
+        }
+        setTimeout(tick,100);
+      });
+    });
+  }
+  function preparePrintExport(){
+    if(LINE_REVEAL){
+      slides.forEach(function(_,i){setReveal(i,99999);});
+    }
+    slides.forEach(function(s,i){
+      s.classList.add('active');
+      s.classList.remove('prev');
+      if(i===0)current=0;
+    });
+  }
+  function startRasterExport(){
+    document.getElementById('deck').style.cssText='position:static;height:auto;overflow:visible;';
+    slides.forEach(function(s){
+      s.style.cssText='position:relative!important;opacity:1!important;transform:none!important;'
+        +'display:flex!important;width:1280px!important;height:720px!important;overflow:hidden;margin-bottom:8px;';
+    });
+    var _ov=document.createElement('div');
+    _ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.82);color:#fff;'
+      +'display:flex;flex-direction:column;align-items:center;justify-content:center;'
+      +'z-index:99999;font-family:sans-serif;gap:12px;';
+    _ov.innerHTML='<div style="font-size:1.4rem;font-weight:600">Generating PDF\u2026</div>'
+      +'<div id="_pdf_st" style="font-size:.95rem;opacity:.75">Loading libraries\u2026</div>'
+      +'<div id="_pdf_bar_wrap" style="width:260px;height:6px;background:rgba(255,255,255,.2);border-radius:3px">'
+      +'<div id="_pdf_bar" style="height:6px;background:#4a9eff;border-radius:3px;width:0;transition:width .2s"></div></div>';
+    document.body.appendChild(_ov);
+    function _loadScript(src,cb){var s=document.createElement('script');s.src=src;s.onload=cb;document.head.appendChild(s);}
+    _loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',function(){
+      _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',function(){
+        var st=document.getElementById('_pdf_st');
+        var bar=document.getElementById('_pdf_bar');
+        var pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'px',format:[3840,2160],hotfixes:['px_scaling']});
+        var i=0;
+        function capture(){
+          if(i>=slides.length){
+            if(st)st.textContent='Saving\u2026';
+            pdf.save('slides.pdf');
+            _ov.remove();
+            return;
+          }
+          if(st)st.textContent='Slide '+(i+1)+' / '+slides.length;
+          if(bar)bar.style.width=Math.round((i/slides.length)*100)+'%';
+          html2canvas(slides[i],{scale:3,width:1280,height:720,useCORS:true,logging:false,backgroundColor:'#ffffff'}).then(function(canvas){
+            if(i>0)pdf.addPage([3840,2160],'landscape');
+            pdf.addImage(canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY),'JPEG',0,0,3840,2160);
+            i++;capture();
+          });
+        }
+        capture();
+      });
+    });
+  }
+  preparePrintExport();
   window.addEventListener('load',function(){
     setTimeout(function(){
-      _loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',function(){
-        _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',function(){
-          var st=document.getElementById('_pdf_st');
-          var bar=document.getElementById('_pdf_bar');
-          var pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'px',format:[3840,2160],hotfixes:['px_scaling']});
-          var i=0;
-          function capture(){
-            if(i>=slides.length){
-              if(st)st.textContent='Saving\u2026';
-              pdf.save('slides.pdf');
-              _ov.remove();
-              return;
-            }
-            if(st)st.textContent='Slide '+(i+1)+' / '+slides.length;
-            if(bar)bar.style.width=Math.round((i/slides.length)*100)+'%';
-            html2canvas(slides[i],{scale:3,width:1280,height:720,useCORS:true,logging:false,backgroundColor:'#ffffff'}).then(function(canvas){
-              if(i>0)pdf.addPage([3840,2160],'landscape');
-              pdf.addImage(canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY),'JPEG',0,0,3840,2160);
-              i++;capture();
-            });
-          }
-          capture();
-        });
+      waitForDeckRender().then(function(){
+        window.__DECK_PRINT_READY__=true;
+        if(PDF_MODE==='raster') startRasterExport();
+        else setTimeout(function(){window.print();},300);
       });
-    },1200); // allow MathJax/Graphviz to finish rendering
+    },400);
   });
 } else if(MIRROR){
   // Mirror mode: hide all projector chrome, receive postMessage from parent
@@ -771,7 +822,7 @@ document.querySelectorAll('pre code:not(.language-dot)').forEach(function(el){
       wrap.appendChild(svg);
       pre.parentNode.replaceChild(wrap, pre);
     }).catch(function(err){
-      pre.style.color = '#E94560';
+      pre.style.color = '__ACCENT__';
       pre.textContent = 'Graphviz error: ' + err;
     });
   });
@@ -786,6 +837,8 @@ def build_html(
     show_likes: bool = True,
     include_stats: bool = True,
     pdf_jpeg_quality: float = 0.92,
+    pdf_mode: str = "vector",
+    palette: dict[str, str] | None = None,
 ) -> str:
     total = len(slide_texts) + (1 if include_stats else 0)
 
@@ -814,6 +867,15 @@ def build_html(
     if not 0.5 <= q <= 1.0:
         raise ValueError("pdf_jpeg_quality must be between 0.5 and 1.0 inclusive")
 
+    mode = pdf_mode.strip().lower()
+    if mode not in {"vector", "raster"}:
+        raise ValueError("pdf_mode must be 'vector' or 'raster'")
+
+    colors = palette if palette is not None else load_palette(None)
+    css = _CSS.replace("__ROOT_CSS__", build_root_css(colors))
+    accent = colors["accent"]
+    init_scripts = _INIT_SCRIPTS.replace("__ACCENT__", accent)
+
     js = (
         _JS_TEMPLATE
         .replace("__AUDIENCE_URL__", AUDIENCE_URL)
@@ -822,6 +884,7 @@ def build_html(
         .replace("__SHOW_QR__", "true" if show_qr else "false")
         .replace("__SHOW_LIKES__", "true" if show_likes else "false")
         .replace("__PDF_JPEG_QUALITY__", json.dumps(q))
+        .replace("__PDF_MODE__", mode)
     )
 
     escaped_title = _esc.escape(doc_title)
@@ -850,7 +913,7 @@ def build_html(
 {qr_script}
 {_MATHJAX_CONFIG}
 <script async src="{_MATHJAX}"></script>
-<style>{_CSS}</style>
+<style>{css}</style>
 </head>
 <body>
 
@@ -875,7 +938,7 @@ def build_html(
 <script src="{_HLJS_JS}"></script>
 <script src="{_VIZ_JS}"></script>
 <script src="{_VIZ_FULL}"></script>
-{_INIT_SCRIPTS}
+{init_scripts}
 <script>{js}</script>
 </body>
 </html>"""
@@ -907,6 +970,13 @@ def main() -> None:
         help="WebSocket scheme for baked URLs (default: WS_SCHEME env or ws).",
     )
     p.add_argument(
+        "--palette",
+        default=os.getenv("PALETTE", ""),
+        metavar="FILE",
+        help="JSON palette file or built-in name (e.g. octopuslab, palettes/foo.json). "
+        "Default: built-in deck-lovers colors.",
+    )
+    p.add_argument(
         "--line-reveal",
         choices=["on", "off"],
         default="on" if LINE_REVEAL_ENV else "off",
@@ -935,7 +1005,13 @@ def main() -> None:
         type=float,
         default=0.92,
         metavar="Q",
-        help="JPEG quality (0.5–1) for #print / server PDF export — lower = smaller PDF (default: 0.92).",
+        help="JPEG quality (0.5–1) for raster PDF mode only (default: 0.92).",
+    )
+    p.add_argument(
+        "--pdf-mode",
+        choices=["vector", "raster"],
+        default=os.getenv("PDF_MODE", "vector"),
+        help="PDF export mode: vector (text + links, default) or raster (JPEG screenshots).",
     )
     args = p.parse_args()
 
@@ -944,6 +1020,13 @@ def main() -> None:
         port=args.port,
         ws_scheme=args.ws_scheme,
     )
+
+    try:
+        palette_path = resolve_palette_path(args.palette or None)
+        palette = load_palette(palette_path)
+    except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+        print(f"ERROR: palette: {exc}", file=sys.stderr)
+        sys.exit(1)
 
     try:
         with open(args.input, encoding="utf-8") as f:   # M1: context manager
@@ -966,10 +1049,13 @@ def main() -> None:
 
     stats_state = "with stats slide" if args.stats == "on" else "without stats slide"
     print(
-        f"[md2html] {len(slide_texts)} slides ({stats_state}) — PDF JPEG Q={args.pdf_quality}"
+        f"[md2html] {len(slide_texts)} slides ({stats_state}) — PDF mode={args.pdf_mode}"
+        + (f" JPEG Q={args.pdf_quality}" if args.pdf_mode == "raster" else "")
     )
     print(f"[md2html] SERVER_HOST={SERVER_HOST}  WS={WS_URL}")
     print(f"[md2html] Audience: {AUDIENCE_URL}")
+    palette_label = palette_path.name if palette_path else "built-in default"
+    print(f"[md2html] Palette: {palette_label} (accent {palette['accent']})")
 
     html = build_html(
         slide_texts,
@@ -979,6 +1065,8 @@ def main() -> None:
         show_likes=(args.likes == "on"),
         include_stats=(args.stats == "on"),
         pdf_jpeg_quality=args.pdf_quality,
+        pdf_mode=args.pdf_mode,
+        palette=palette,
     )
 
     with open(args.output, "w", encoding="utf-8") as f:  # M1: context manager

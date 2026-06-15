@@ -11,8 +11,10 @@
 #   ./deploy.sh --no-qr                  # hide audience QR overlay in projector HTML
 #   ./deploy.sh --no-stats               # remove final audience scoring slide
 #   ./deploy.sh --no-likes               # hide projector likes UI/effects
-#   ./deploy.sh --pdf-quality 0.82       # smaller PDF / JPEG compression (default 0.92)
+#   ./deploy.sh --pdf-quality 0.82       # raster mode only — JPEG compression
+#   ./deploy.sh --pdf-mode raster        # JPEG screenshots (legacy); default is vector
 #   ./deploy.sh --port 9000              # host port (default 8000); same as PORT=9000
+#   ./deploy.sh --palette octopuslab     # JSON palette (name or path); PALETTE=… env
 #   ./deploy.sh --qr off                 # same as --no-qr (general form)
 #   ./deploy.sh --likes off              # same as --no-likes (projector-side only)
 #   ./deploy.sh --cloudflare <url>       # rebake Cloudflare tunnel URL into QR code
@@ -26,6 +28,8 @@
 #   VPS          user@host  — if set, deploy to remote host
 #   VPS_PORT     SSH port (default 22)
 #   PORT         app host port (default 8000); overridden by --port
+#   PALETTE      palette name or JSON path for md2html (e.g. octopuslab)
+#   PDF_MODE     vector (default) or raster for PDF export
 #   COMPOSE      override compose runtime (default: auto-detect)
 #   SERVER_HOST  override hostname baked into QR code (remote: auto-sslip.io)
 #   WS_SCHEME    ws or wss (remote: auto wss; local --https: auto wss)
@@ -50,8 +54,10 @@ LINE_REVEAL="off" # --line-reveal
 SHOW_QR="on" # --qr on|off or --no-qr
 SHOW_STATS="on" # --stats on|off or --no-stats
 SHOW_LIKES="on" # --likes on|off or --no-likes (projector UI/effects only)
-PDF_QUALITY="${PDF_QUALITY:-0.92}" # --pdf-quality <0.5–1> or PDF_QUALITY env
+PDF_QUALITY="${PDF_QUALITY:-0.92}" # --pdf-quality <0.5–1> or PDF_QUALITY env (raster only)
 PORT=${PORT:-8000}                 # --port <n> or PORT env
+PALETTE="${PALETTE:-}"             # --palette <name|path> or PALETTE env
+PDF_MODE="${PDF_MODE:-vector}"     # --pdf-mode vector|raster or PDF_MODE env
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -78,8 +84,12 @@ while [[ $# -gt 0 ]]; do
       SHOW_LIKES="${2:?'--likes requires on|off'}"; shift 2 ;;
     --pdf-quality)
       PDF_QUALITY="${2:?'--pdf-quality requires a number 0.5–1 (e.g. 0.85)'}"; shift 2 ;;
+    --pdf-mode)
+      PDF_MODE="${2:?'--pdf-mode requires vector or raster'}"; shift 2 ;;
     --port)
       PORT="${2:?'--port requires a port number (e.g. 9000)'}"; shift 2 ;;
+    --palette)
+      PALETTE="${2:?'--palette requires a palette name or JSON path'}"; shift 2 ;;
     --cloudflare)
       CF_URL="${2:?'--cloudflare requires a URL argument'}";  shift 2 ;;
     *) shift ;;
@@ -96,6 +106,10 @@ if [[ "$SHOW_STATS" != "on" && "$SHOW_STATS" != "off" ]]; then
 fi
 if [[ "$SHOW_LIKES" != "on" && "$SHOW_LIKES" != "off" ]]; then
   echo "ERROR: --likes accepts only 'on' or 'off'" >&2
+  exit 1
+fi
+if [[ "$PDF_MODE" != "vector" && "$PDF_MODE" != "raster" ]]; then
+  echo "ERROR: --pdf-mode / PDF_MODE must be 'vector' or 'raster'" >&2
   exit 1
 fi
 if ! [[ "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
@@ -193,6 +207,7 @@ printf "│  qr      : %-30s│\n" "$SHOW_QR"
 printf "│  stats   : %-30s│\n" "$SHOW_STATS"
 printf "│  likes   : %-30s│\n" "$SHOW_LIKES"
 printf "│  pdf-q   : %-30s│\n" "$PDF_QUALITY"
+printf "│  pdf-mode: %-30s│\n" "$PDF_MODE"
 printf "│  pdf     : %-30s│\n" "$PDF_ONLY"
 [[ "$MODE" == "remote" ]] && printf "│  vps     : %-30s│\n" "$VPS"
 echo "└─────────────────────────────────────────┘"
@@ -249,20 +264,26 @@ _convert() {
   # Remove any stale file — previous runs may have left it with a different owner
   # (e.g. appuser/UID-1000 from an old image) that the current container can't overwrite.
   rm -f output/slides.html
-  export SERVER_HOST="$host" WS_SCHEME LINE_REVEAL SHOW_QR SHOW_LIKES
-  $COMPOSE run --rm --remove-orphans md2html \
-      python md2html.py \
-      --input /workspace/slides.md \
-      --output /workspace/slides.html \
-      --server-host "$host" \
-      --port "$PORT" \
-      --ws-scheme "$WS_SCHEME" \
-      --line-reveal "$LINE_REVEAL" \
-      --qr "$SHOW_QR" \
-      --stats "$SHOW_STATS" \
-      --likes "$SHOW_LIKES" \
-      --pdf-quality "$PDF_QUALITY" \
+  export SERVER_HOST="$host" WS_SCHEME LINE_REVEAL SHOW_QR SHOW_LIKES PALETTE PDF_MODE
+  MD2HTML_ARGS=(
+      python md2html.py
+      --input /workspace/slides.md
+      --output /workspace/slides.html
+      --server-host "$host"
+      --port "$PORT"
+      --ws-scheme "$WS_SCHEME"
+      --line-reveal "$LINE_REVEAL"
+      --qr "$SHOW_QR"
+      --stats "$SHOW_STATS"
+      --likes "$SHOW_LIKES"
+      --pdf-quality "$PDF_QUALITY"
+      --pdf-mode "$PDF_MODE"
       --title "Presentation"
+  )
+  if [[ -n "$PALETTE" ]]; then
+    MD2HTML_ARGS+=(--palette "$PALETTE")
+  fi
+  $COMPOSE run --rm --remove-orphans md2html "${MD2HTML_ARGS[@]}"
   echo "  ✓ output/slides.html ready"
   echo
 }

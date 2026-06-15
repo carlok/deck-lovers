@@ -1,0 +1,22 @@
+{
+  "name": "deck-lovers",
+  "description": "Default warm cream deck with coral accent (built-in fallback).",
+  "colors": {
+    "accent": "#E94560",
+    "accent-hover": "#C73E54",
+    "success": "#2ECC71",
+    "warning": "#F39C12",
+    "dark": "#1A2333",
+    "text": "#2C3E50",
+    "muted": "#7F8C8D",
+    "bg": "#FAFAF8",
+    "bg-cream": "#FFF9F0",
+    "border": "#E8E4DF",
+    "link": "#3498DB",
+    "pre-text": "#CBD5E1",
+    "table-stripe": "#F7F5F2",
+    "table-hover": "#FFF0F2",
+    "title-gradient-mid": "#FFF0F3",
+    "title-gradient-end": "#FFF8EC"
+  }
+}

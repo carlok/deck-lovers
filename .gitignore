@@ -40,6 +40,9 @@ coverage/
 .env.*
 !.env.example
 
+# Local palette overrides (ship palettes/default.json only)
+palettes/octopuslab.json
+
 # Caddyfile — Caddyfile and Caddyfile.prod are committed (contain no secrets).
 # Only local personal overrides are ignored:
 Caddyfile.local

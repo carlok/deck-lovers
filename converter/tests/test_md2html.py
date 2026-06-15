@@ -5,7 +5,12 @@ Run inside the test container:  pytest --cov=md2html --cov-report=term-missing
 import os
 import sys
 import re
+from pathlib import Path
+
 import pytest
+
+FIXTURES = Path(__file__).parent / "fixtures"
+INDIGO_PALETTE = FIXTURES / "indigo-palette.json"
 
 # Ensure env vars are set before import so build_html picks them up
 os.environ.setdefault("SERVER_HOST", "localhost")
@@ -193,23 +198,25 @@ class TestBuildHtml:
         assert "function onLikeUpdate" in html
         assert "likesData[msg.slide]=msg.count" in html
 
-    def test_landscape_print_css(self):
+    def test_vector_pdf_print_css(self):
         html = self._html()
-        # PDF generated via html2canvas + jsPDF at 4K (3840x2160) from 1280x720*3 capture
+        assert "@media print" in html
+        assert "size:1280px 720px" in html
+        assert "__DECK_PRINT_READY__" in html
+        assert "PDF_MODE='vector'" in html
+
+    def test_raster_pdf_mode_bakes_js(self):
+        html = md2html.build_html(self.SLIDES, doc_title="Deck", pdf_mode="raster")
+        assert "var PDF_MODE='raster';" in html
         assert "html2canvas" in html
         assert "jsPDF" in html
-        assert "3840" in html
-        assert "2160" in html
-        assert "scale:3" in html
-        assert "PDF_JPEG_QUALITY" in html
-        assert "toDataURL('image/jpeg'" in html
-        assert ",'JPEG'," in html
 
     def test_pdf_jpeg_quality_baked_into_js(self):
         html = md2html.build_html(
             self.SLIDES,
             doc_title="Deck",
             pdf_jpeg_quality=0.85,
+            pdf_mode="raster",
         )
         assert "PDF_JPEG_QUALITY=0.85" in html
 
@@ -474,5 +481,53 @@ class TestMain:
         monkeypatch.setattr(sys, "argv",
             ["md2html.py", "--input", str(tmp_path / "nope.md"),
              "--output", str(tmp_path / "out.html")])
+        with pytest.raises(SystemExit):
+            md2html.main()
+
+
+# ── palette ───────────────────────────────────────────────────────────────────
+
+class TestPalette:
+    def test_default_palette_bakes_coral_accent(self):
+        html = md2html.build_html(["## S\n\nBody"], doc_title="T")
+        assert "--accent:#e94560" in html.lower().replace(" ", "")
+
+    def test_custom_palette_bakes_indigo_accent(self):
+        from palette import load_palette
+
+        palette = load_palette(INDIGO_PALETTE)
+        html = md2html.build_html(
+            ["## S\n\nBody"], doc_title="T", palette=palette,
+        )
+        assert "--accent:#425ec9" in html.lower().replace(" ", "")
+
+    def test_cli_palette_json_path(self, tmp_path, monkeypatch):
+        import sys
+
+        md_file = tmp_path / "slides.md"
+        md_file.write_text("## One\n\nHello", encoding="utf-8")
+        out_file = tmp_path / "slides.html"
+        monkeypatch.setattr(sys, "argv", [
+            "md2html.py",
+            "--input", str(md_file),
+            "--output", str(out_file),
+            "--palette", str(INDIGO_PALETTE),
+        ])
+        md2html.main()
+        html = out_file.read_text(encoding="utf-8")
+        assert "--accent:#425ec9" in html.lower().replace(" ", "")
+
+    def test_invalid_palette_exits(self, tmp_path, monkeypatch):
+        import sys
+
+        md_file = tmp_path / "slides.md"
+        md_file.write_text("## One\n\nHello", encoding="utf-8")
+        out_file = tmp_path / "slides.html"
+        monkeypatch.setattr(sys, "argv", [
+            "md2html.py",
+            "--input", str(md_file),
+            "--output", str(out_file),
+            "--palette", "no-such-palette",
+        ])
         with pytest.raises(SystemExit):
             md2html.main()
