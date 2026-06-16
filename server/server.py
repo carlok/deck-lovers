@@ -88,6 +88,10 @@ def _message_int(value, default: int = 0) -> int:
         return default
 
 
+def _clamp_slide_index(value: int) -> int:
+    return max(0, min(value, max(slides_total - 1, 0)))
+
+
 async def _broadcast_audience(msg: dict) -> None:
     """Send a message to all non-projector clients."""
     dead: list[WebSocket] = []
@@ -289,7 +293,7 @@ async def websocket_endpoint(ws: WebSocket):
 
             elif mtype == "slide_change" and ws is projector_ws:
                 idx = _message_int(msg.get("index"), 0)            # I2: bounds-check
-                current_slide = max(0, min(idx, max(slides_total - 1, 0)))
+                current_slide = _clamp_slide_index(idx)
                 current_reveal = max(0, _message_int(msg.get("reveal"), 0))
                 m = _meta(current_slide)
                 await _broadcast_audience({
@@ -303,7 +307,7 @@ async def websocket_endpoint(ws: WebSocket):
 
             elif mtype == "presentation_state" and ws is projector_ws:
                 idx = _message_int(msg.get("index"), current_slide)
-                current_slide = max(0, min(idx, max(slides_total - 1, 0)))
+                current_slide = _clamp_slide_index(idx)
                 current_reveal = max(0, _message_int(msg.get("reveal"), 0))
                 m = _meta(current_slide)
                 await _broadcast_audience({
@@ -316,7 +320,7 @@ async def websocket_endpoint(ws: WebSocket):
                 })
 
             elif mtype == "like":
-                slide_idx = _message_int(msg.get("slide"), current_slide)
+                slide_idx = _clamp_slide_index(_message_int(msg.get("slide"), current_slide))
                 user = username                                     # I1: ignore spoofable client field
                 bucket = likes.setdefault(slide_idx, [])
                 if len(bucket) < LIKES_CAP:  # C3 fix: cap at 1000
