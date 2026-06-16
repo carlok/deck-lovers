@@ -343,6 +343,37 @@ class TestWebSocket:
             server_mod.likes = {}
             server_mod.projector_ws = None
 
+    def test_like_slide_index_is_clamped_to_known_slide_range(self):
+        """Like messages should not create counters for impossible slide indexes."""
+        server_mod.slides_meta = [{"title": "S1", "summary": ""}, {"title": "S2", "summary": ""}]
+        server_mod.slides_total = 2
+        server_mod.current_slide = 0
+        server_mod.likes = {}
+        try:
+            with client.websocket_connect("/ws") as proj:
+                _register(proj, "projector")
+
+                with client.websocket_connect("/ws") as aud:
+                    _register(aud, "audience")
+
+                    aud.send_json({"type": "like", "slide": -10})
+                    low = proj.receive_json()
+                    assert low["type"] == "like_update"
+                    assert low["slide"] == 0
+
+                    aud.send_json({"type": "like", "slide": 99})
+                    high = proj.receive_json()
+                    assert high["type"] == "like_update"
+                    assert high["slide"] == 1
+
+            assert set(server_mod.likes) == {0, 1}
+        finally:
+            server_mod.slides_meta = []
+            server_mod.slides_total = 0
+            server_mod.current_slide = 0
+            server_mod.likes = {}
+            server_mod.projector_ws = None
+
     def test_generate_username_no_name(self):
         """Every new audience connection gets a unique auto-generated name."""
         with client.websocket_connect("/ws") as ws:
