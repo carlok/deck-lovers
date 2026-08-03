@@ -65,17 +65,17 @@ describe('buildWsUrl', () => {
 // ── buildPdfUrl ───────────────────────────────────────────────────────────────
 
 describe('buildPdfUrl', () => {
-  test('builds /#print URL for http', () => {
+  test('builds the PDF download URL for http', () => {
     expect(buildPdfUrl('http:', '192.168.1.1', '8000'))
-      .toBe('http://192.168.1.1:8000/#print');
+      .toBe('http://192.168.1.1:8000/download.pdf');
   });
-  test('builds /#print URL for https', () => {
+  test('builds the PDF download URL for https', () => {
     expect(buildPdfUrl('https:', 'example.com', '443'))
-      .toBe('https://example.com:443/#print');
+      .toBe('https://example.com:443/download.pdf');
   });
-  test('always ends with /#print', () => {
+  test('always ends with /download.pdf', () => {
     const url = buildPdfUrl('http:', 'localhost', '8000');
-    expect(url.endsWith('/#print')).toBe(true);
+    expect(url.endsWith('/download.pdf')).toBe(true);
   });
 });
 

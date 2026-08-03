@@ -16,6 +16,7 @@ app = FastAPI(title="Presentation Server")
 
 WORKSPACE = Path(os.getenv("WORKSPACE_PATH", "/app/workspace"))
 SLIDES_HTML = WORKSPACE / "slides.html"
+AUDIENCE_PDF = WORKSPACE / "audience.pdf"
 AUDIENCE_HTML = Path(__file__).parent / "audience.html"
 AUDIENCE_SRC  = Path(__file__).parent / "src"
 PROJECTOR_SECRET   = os.getenv("PROJECTOR_SECRET", "")    # Optional WS projector auth
@@ -181,6 +182,19 @@ async def serve_print():
     if not SLIDES_HTML.exists():
         return JSONResponse(status_code=503, content={"error": "slides.html not found"})
     return FileResponse(SLIDES_HTML, media_type="text/html")
+
+
+@app.get("/download.pdf")
+async def download_audience_pdf():
+    """Download the stable server-generated PDF for audience devices."""
+    if not AUDIENCE_PDF.exists():
+        return JSONResponse(status_code=404, content={"error": "audience PDF not found"})
+    return FileResponse(
+        AUDIENCE_PDF,
+        media_type="application/pdf",
+        filename="presentation.pdf",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
+    )
 
 
 @app.post("/login")

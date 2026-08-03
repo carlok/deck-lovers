@@ -354,8 +354,11 @@ _convert() {
 # ── Shared: server-side PDF export via headless browser ──────────────────────
 _export_pdf() {
   echo "▶ 3/3  pdf      output/slides.html → output/$PDF_NAME"
-  rm -f "output/$PDF_NAME"
+  rm -f "output/$PDF_NAME" output/audience.pdf
   $COMPOSE run --rm --remove-orphans pdf /workspace/slides.html "/workspace/$PDF_NAME"
+  if [[ "$PDF_NAME" != "audience.pdf" ]]; then
+    cp "output/$PDF_NAME" output/audience.pdf
+  fi
   echo "  ✓ output/$PDF_NAME ready"
   echo
 }
@@ -377,7 +380,7 @@ _endpoints() {
   printf "│  %-12s│  %-44s│\n" "WebSocket"  "$WS://$h$P/ws"
   if [[ "$show_hint" == "true" ]]; then
     echo "├──────────────┴──────────────────────────────────────────────┤"
-    echo "│  QR code bottom-left of projector view  ·  Ctrl-C to stop  │"
+    echo "│  QR code top-right of projector view  ·  Ctrl-C to stop    │"
   fi
   echo "└─────────────────────────────────────────────────────────────┘"
   echo
@@ -468,8 +471,10 @@ REMOTE
   # ── Convert locally, push HTML to VPS ─────────────────────────────────────
   if $CONVERT; then
     _convert "$HOST"
-    echo "▶ Pushing slides.html to VPS…"
+    _export_pdf
+    echo "▶ Pushing slides.html and audience PDF to VPS…"
     $SCP output/slides.html "$VPS:/root/deck-lovers/output/slides.html"
+    $SCP output/audience.pdf "$VPS:/root/deck-lovers/output/audience.pdf"
     echo "  ✓ pushed"
     echo
   fi
@@ -491,9 +496,7 @@ else
 
   if $CONVERT; then
     _convert "$HOST"
-    if $PDF_ONLY; then
-      _export_pdf
-    fi
+    _export_pdf
   fi
 
   if $SERVE; then

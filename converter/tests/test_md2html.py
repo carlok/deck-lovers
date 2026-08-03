@@ -244,6 +244,11 @@ class TestBuildHtml:
         assert "__DECK_PRINT_READY__" in html
         assert "PDF_MODE='vector'" in html
 
+    def test_qr_overlay_is_top_right(self):
+        html = self._html()
+        assert "#qr-overlay{position:fixed;top:24px;right:24px" in html
+        assert "#qr-overlay~#like-sidebar{top:180px;}" in html
+
     def test_raster_pdf_mode_bakes_js(self):
         html = md2html.build_html(self.SLIDES, doc_title="Deck", pdf_mode="raster")
         assert "var PDF_MODE='raster';" in html
@@ -301,8 +306,14 @@ class TestBuildHtml:
             emoji_mode="svg",
         )
         assert 'class="emoji-img"' in html
+        assert 'loading="eager"' in html
         assert "/svg/1f9f5.svg" in html
         assert "<h1>" in html and "Title</h1>" in html
+
+    def test_print_mode_waits_for_emoji_images(self):
+        html = self._html()
+        assert "waitForEmojiImages" in html
+        assert "__DECK_PRINT_READY__" in html
 
     def test_stats_slide_appended(self):
         html = self._html()

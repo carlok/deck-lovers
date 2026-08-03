@@ -65,3 +65,4 @@ class TestSubstituteTwemoji:
         tag = twemoji_img_tag('🧵')
         assert 'alt="🧵"' in tag
         assert "emoji-img" in tag
+        assert 'loading="eager"' in tag

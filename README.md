@@ -193,7 +193,7 @@ Caddy obtains the cert and audience URL becomes `https://1-2-3-4.sslip.io/audien
 # Convert only (no server restart)
 ./deploy.sh --convert-only
 
-# Convert + server-side PDF export only (no server start)
+# Convert + export PDF only (no server start)
 ./deploy.sh --pdf-only
 ./deploy.sh --pdf-only --pdf-name deck.pdf   # → output/deck.pdf
 
@@ -324,16 +324,17 @@ All generated files land on the host in `./output/`:
 output/
 ├── slides.md          ← intermediate Markdown (editable)
 ├── img/               ← slide image assets (referenced from Markdown)
-└── slides.html        ← final standalone deck (open directly in browser)
-└── slides.pdf         ← server-side generated PDF (`--pdf-only`; rename with `--pdf-name`)
+├── slides.html        ← final standalone deck (open directly in browser)
+├── slides.pdf         ← server-side generated PDF (rename with `--pdf-name`)
+└── audience.pdf       ← stable PDF downloaded from the audience page
 ```
 
-PDF export uses **Chromium vector print** by default: selectable text and clickable links, one 16:9 slide per page. Use `--pdf-mode raster` for the legacy JPEG-screenshot path (supports `--pdf-quality`). Use `--pdf-name my-deck.pdf` (or `PDF_NAME=my-deck.pdf`) to write a different basename under `output/`.
+Every conversion creates a PDF using **Chromium vector print**: selectable text and clickable links, one 16:9 slide per page. The audience page downloads this prebuilt file instead of relying on each phone's print engine. Use `--pdf-mode raster` for the legacy JPEG-screenshot path (supports `--pdf-quality`). Use `--pdf-name my-deck.pdf` (or `PDF_NAME=my-deck.pdf`) to write a different basename under `output/`.
 
 | Mode | Command | Output |
 |------|---------|--------|
-| **vector** (default) | `./deploy.sh --pdf-only` | `output/slides.pdf` (or `--pdf-name`) |
-| raster | `./deploy.sh --pdf-only --pdf-mode raster --pdf-quality 0.82` | Flat JPEG pages per slide |
+| **vector** (default) | `./deploy.sh` | `output/slides.pdf` (or `--pdf-name`) |
+| raster | `./deploy.sh --pdf-mode raster --pdf-quality 0.82` | Flat JPEG pages per slide |
 
 Set `PDF_MODE=vector` or `PDF_MODE=raster` in `.env` to change the default for `deploy.sh` and the `pdf` container. Set `PDF_NAME=deck.pdf` to change the default output basename.
 
@@ -377,7 +378,7 @@ All test suites run in containers and write coverage reports to `test-results/`.
 ./run_tests.sh js
 ```
 
-**Converter suite** (as of last run): **124 tests**, **~92% line coverage** on `md2html`, `palette`, and `emoji_img`. Branding and PDF export naming are covered by:
+**Converter suite** (as of last run): **125 tests**, **~92% line coverage** on `md2html`, `palette`, and `emoji_img`. Branding and PDF export naming are covered by:
 
 - `converter/tests/test_palette.py` — `load_branding`, `merge_branding`, CSS vars, validation
 - `converter/tests/test_md2html.py` — chrome HTML, `logo_on` modes, front matter, CLI `--logo` / `--no-frame` / `--logo-on`, `--pdf-name` / `parse_pdf_name`
@@ -596,7 +597,7 @@ systemctl --user enable --now presentation.container
 1. Edit `slides.md` (or put `slides.tex` in `source/`)
 2. `./deploy.sh` — converts + starts server, shows all endpoints
 3. Open `http://<IP>:8000` on projector machine → F11 fullscreen
-4. Show QR code (bottom-left) to audience
+4. Show QR code (top-right) to audience
 5. Navigate with ← → arrow keys
 6. Watch likes sidebar on the right
 7. Navigate to last slide for the engagement bar chart
@@ -762,6 +763,8 @@ EMOJI=twemoji ./deploy.sh --convert-only --slides-file tmp/deck.md
 ```
 
 Use `--emoji png` or `EMOJI=png` for 72×72 PNG assets instead of SVG. Omit `--emoji` (or `EMOJI=off`) for native emoji.
+
+Twemoji assets are fetched from jsDelivr at **PDF export time** (not at `md2html` convert). The print pipeline preloads every `emoji-img` on all slides before generating the PDF, so off-screen slides are not skipped.
 
 **Option B — your own asset (manual):** put an SVG or PNG in `output/img/` and reference it in markdown:
 

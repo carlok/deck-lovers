@@ -70,7 +70,7 @@ def twemoji_img_tag(emoji_chars: str, fmt: TwemojiFormat = "svg") -> str:
     src = html_module.escape(url, quote=True)
     return (
         f'<img class="emoji-img" src="{src}" alt="{alt}" '
-        f'draggable="false" loading="lazy" decoding="async">'
+        f'draggable="false" loading="eager" decoding="async">'
     )
 
 

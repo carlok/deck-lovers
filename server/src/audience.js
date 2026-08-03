@@ -47,9 +47,9 @@ function toggleFullscreen(){
 }
 btnFs.addEventListener('click', toggleFullscreen);
 
-// PDF: open slides in print mode in a new tab
+// PDF: download the server-generated file so mobile browser print engines do not reflow slides.
 document.getElementById('btn-pdf').addEventListener('click', function(){
-  window.open(location.protocol + '//' + HOST + PORT_PART + '/print#print', '_blank');
+  window.open(location.protocol + '//' + HOST + PORT_PART + '/download.pdf', '_blank');
 });
 document.addEventListener('fullscreenchange', updateFsIcon);
 document.addEventListener('webkitfullscreenchange', updateFsIcon);

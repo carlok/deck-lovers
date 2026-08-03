@@ -469,7 +469,7 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
   letter-spacing:.08em;min-width:4.5em;text-align:center;}
 
 /* QR */
-#qr-overlay{position:fixed;bottom:24px;left:24px;z-index:200;
+#qr-overlay{position:fixed;top:24px;right:24px;z-index:200;
   background:var(--qr-bg);padding:10px 10px 6px;border-radius:14px;
   box-shadow:0 6px 24px rgba(0,0,0,.24);backdrop-filter:blur(10px);
   text-align:center;cursor:pointer;transition:transform .2s var(--ease),box-shadow .2s;}
@@ -481,6 +481,7 @@ li.task-done>span+*,li.task-done>span~*{text-decoration:line-through;color:var(-
 /* Like sidebar */
 #like-sidebar{position:fixed;right:0;top:18px;z-index:200;
   display:flex;align-items:flex-start;}
+#qr-overlay~#like-sidebar{top:180px;}
 #sidebar-toggle{background:var(--accent);color:#fff;border:none;border-radius:8px 0 0 8px;
   width:34px;height:42px;cursor:pointer;font-size:.9rem;display:flex;align-items:center;
   justify-content:center;box-shadow:-3px 0 14px var(--accent-shadow);
@@ -848,6 +849,20 @@ if(PRINT){
       if(i===0)current=0;
     });
   }
+  function waitForEmojiImages(root){
+    var scope=root||document;
+    var imgs=Array.from(scope.querySelectorAll('img.emoji-img'));
+    if(!imgs.length)return Promise.resolve();
+    imgs.forEach(function(img){img.loading='eager';});
+    return Promise.all(imgs.map(function(img){
+      if(img.complete && img.naturalWidth>0)return Promise.resolve();
+      return new Promise(function(resolve){
+        function done(){resolve();}
+        img.addEventListener('load',done,{once:true});
+        img.addEventListener('error',done,{once:true});
+      });
+    }));
+  }
   function startRasterExport(){
     document.getElementById('deck').style.cssText='position:static;height:auto;overflow:visible;';
     slides.forEach(function(s){
@@ -879,10 +894,12 @@ if(PRINT){
           }
           if(st)st.textContent='Slide '+(i+1)+' / '+slides.length;
           if(bar)bar.style.width=Math.round((i/slides.length)*100)+'%';
-          html2canvas(slides[i],{scale:3,width:1280,height:720,useCORS:true,logging:false,backgroundColor:'#ffffff'}).then(function(canvas){
-            if(i>0)pdf.addPage([3840,2160],'landscape');
-            pdf.addImage(canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY),'JPEG',0,0,3840,2160);
-            i++;capture();
+          waitForEmojiImages(slides[i]).then(function(){
+            html2canvas(slides[i],{scale:3,width:1280,height:720,useCORS:true,logging:false,backgroundColor:'#ffffff'}).then(function(canvas){
+              if(i>0)pdf.addPage([3840,2160],'landscape');
+              pdf.addImage(canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY),'JPEG',0,0,3840,2160);
+              i++;capture();
+            });
           });
         }
         capture();
@@ -892,7 +909,9 @@ if(PRINT){
   preparePrintExport();
   window.addEventListener('load',function(){
     setTimeout(function(){
-      waitForDeckRender().then(function(){
+      waitForDeckRender()
+        .then(function(){return waitForEmojiImages();})
+        .then(function(){
         window.__DECK_PRINT_READY__=true;
         if(PDF_MODE==='raster') startRasterExport();
         else setTimeout(function(){window.print();},300);

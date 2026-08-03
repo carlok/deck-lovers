@@ -30,9 +30,9 @@ function buildWsUrl(protocol, host, port) {
   return scheme + '://' + host + ':' + port + '/ws';
 }
 
-/** Build the /#print URL used for PDF export. */
+/** Build the stable server-generated PDF download URL. */
 function buildPdfUrl(protocol, host, port) {
-  return protocol + '//' + host + ':' + port + '/#print';
+  return protocol + '//' + host + ':' + port + '/download.pdf';
 }
 
 /** Exponential back-off capped at maxDelay ms. */

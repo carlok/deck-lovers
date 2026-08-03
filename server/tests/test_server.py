@@ -196,6 +196,21 @@ class TestMirrorAndPrint:
         assert r.status_code == 503
         assert r.json()["error"] == "slides.html not found"
 
+    def test_download_pdf_returns_404_when_missing(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(server_mod, "AUDIENCE_PDF", tmp_path / "audience.pdf")
+        r = client.get("/download.pdf")
+        assert r.status_code == 404
+
+    def test_download_pdf_returns_attachment(self, tmp_path, monkeypatch):
+        pdf = tmp_path / "audience.pdf"
+        pdf.write_bytes(b"%PDF-1.4\n")
+        monkeypatch.setattr(server_mod, "AUDIENCE_PDF", pdf)
+        r = client.get("/download.pdf")
+        assert r.status_code == 200
+        assert "application/pdf" in r.headers["content-type"]
+        assert "attachment" in r.headers["content-disposition"]
+        assert r.headers["cache-control"] == "no-cache, no-store, must-revalidate"
+
 
 class TestAudienceAssetsMissing:
     def test_audience_missing_returns_503(self, tmp_path, monkeypatch):
