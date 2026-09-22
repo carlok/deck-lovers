@@ -235,6 +235,9 @@ PORT=9000 ./deploy.sh
 # Serve-only does not re-run md2html — convert again if you changed port since last build.
 # If using Cloudflare tunnel, point it at the same port:
 #   cloudflared tunnel --url http://localhost:9000
+# deploy.sh checks the host port before building. If another container or process
+# already holds it you get a clear error naming the culprit, instead of Podman's
+# opaque "proxy already running" — stop the culprit or pass --port.
 
 # Color palette (built-in name or JSON path). Shipped: default
 ./deploy.sh --palette default

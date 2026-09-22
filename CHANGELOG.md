@@ -7,6 +7,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `deploy.sh` checks that the host port(s) it is about to publish are free before building, and names the container or process holding them (Podman only reports `"proxy already running"`).
+
 ## [0.1.0] - 2026-03-27
 
 ### Added

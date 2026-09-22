@@ -386,6 +386,57 @@ _endpoints() {
   echo
 }
 
+# ── Local: fail fast if a host port we are about to publish is already taken ─
+# Podman reports a clash only after the images are built, and only as the
+# opaque `"proxy already running"` error that never names the port.
+# Containers of this compose project are ignored: compose recreates them.
+_check_ports_free() {
+  local project="${COMPOSE_PROJECT_NAME:-$(basename "$PWD")}"
+  project=$(printf '%s' "$project" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')
+  local running
+  # '|' as separator: a tab is IFS whitespace, so an empty label (plain
+  # `podman run` container) would collapse and shift the ports column.
+  running=$(podman ps --format '{{.Names}}|{{.Label "com.docker.compose.project"}}|{{.Ports}}' 2>/dev/null || true)
+
+  local port owner name proj ports listener
+  for port in "$@"; do
+    # 1) Another running container already publishes this host port?
+    owner=""
+    while IFS='|' read -r name proj ports; do
+      [[ "$ports" == *":${port}->"* ]] || continue
+      if [[ "$proj" == "$project" ]]; then
+        owner="self"
+      else
+        owner="container '$name'"
+        [[ -n "$proj" ]] && owner+=" (compose project '$proj')"
+      fi
+      break
+    done <<< "$running"
+    [[ "$owner" == "self" ]] && continue
+    if [[ -n "$owner" ]]; then
+      echo "ERROR: host port $port is already published by $owner." >&2
+      echo "       Stop it (podman stop $name) or use another port: ./deploy.sh --port <n>  (same as PORT=<n>)" >&2
+      exit 1
+    fi
+
+    # 2) Some other process on the host listening on it?
+    listener=""
+    if command -v lsof &>/dev/null; then
+      listener=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null \
+                 | awk 'NR>1 {print $1" (pid "$2")"}' | sort -u | paste -sd, - || true)
+    elif command -v ss &>/dev/null; then
+      listener=$(ss -Hltnp "sport = :$port" 2>/dev/null | grep -o 'users:(([^)]*)' | head -1 || true)
+    elif (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+      listener="an unknown process"
+    fi
+    if [[ -n "$listener" ]]; then
+      echo "ERROR: host port $port is already in use by $listener." >&2
+      echo "       Free it or use another port: ./deploy.sh --port <n>  (same as PORT=<n>)" >&2
+      exit 1
+    fi
+  done
+}
+
 # ══════════════════════════════════════════════════════════════════════════════
 # REMOTE MODE
 # ══════════════════════════════════════════════════════════════════════════════
@@ -493,6 +544,13 @@ REMOTE
 # LOCAL MODE
 # ══════════════════════════════════════════════════════════════════════════════
 else
+
+  # Pre-flight: refuse before the (slow) build if a host port is already taken.
+  if $SERVE; then
+    PUBLISH_PORTS=("$PORT")
+    [[ "$WS_SCHEME" == "wss" ]] && PUBLISH_PORTS+=(80 443)   # Caddy (tls profile)
+    _check_ports_free "${PUBLISH_PORTS[@]}"
+  fi
 
   if $CONVERT; then
     _convert "$HOST"
