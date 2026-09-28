@@ -7,6 +7,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+- The projector login cookie now carries a random per-process session token instead of `PROJECTOR_PASSWORD` itself; restarting the server invalidates old cookies. Password and cookie checks are constant-time.
+
 ### Added
 - `deploy.sh` checks that the host port(s) it is about to publish are free before building, and names the container or process holding them (Podman only reports `"proxy already running"`).
 

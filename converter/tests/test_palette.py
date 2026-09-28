@@ -121,7 +121,7 @@ class TestFontFamily:
 
     def test_build_font_head_links_includes_stylesheet(self):
         links = build_font_head_links("Montserrat")
-        assert "fonts.googleapis.com" in links
+        assert google_fonts_css_url("Montserrat") in links
         assert "Montserrat" in links
 
 

@@ -27,7 +27,16 @@ import server as server_mod
 from server import app, PROJECTOR_PASSWORD
 
 client = TestClient(app)
-_AUTH = {"proj_auth": PROJECTOR_PASSWORD}  # cookie used by projector-page tests
+
+
+def _login_cookie() -> dict[str, str]:
+    """Log in with a throwaway client and return the auth cookie it was issued."""
+    r = TestClient(app).post("/login", data={"password": PROJECTOR_PASSWORD},
+                             follow_redirects=False)
+    return {"proj_auth": r.cookies["proj_auth"]}
+
+
+_AUTH = _login_cookie()  # cookie used by projector-page tests
 
 
 def _wait_for(predicate, timeout=1.0):
@@ -85,6 +94,24 @@ class TestAuth:
         r = client.post("/login", data={"password": PROJECTOR_PASSWORD},
                         follow_redirects=False)
         assert "proj_auth" in r.cookies
+
+    def test_cookie_does_not_contain_password(self):
+        r = client.post("/login", data={"password": PROJECTOR_PASSWORD},
+                        follow_redirects=False)
+        assert r.cookies["proj_auth"] != PROJECTOR_PASSWORD
+        assert PROJECTOR_PASSWORD not in r.cookies["proj_auth"]
+
+    def test_login_cookie_grants_access(self):
+        fresh = TestClient(app)
+        r = fresh.post("/login", data={"password": PROJECTOR_PASSWORD},
+                       follow_redirects=False)
+        r2 = fresh.get("/", cookies={"proj_auth": r.cookies["proj_auth"]})
+        assert r2.status_code == 200
+
+    def test_password_as_cookie_value_is_rejected(self):
+        # The cookie must be an opaque token: presenting the password itself must fail.
+        r = TestClient(app).get("/", cookies={"proj_auth": PROJECTOR_PASSWORD})
+        assert r.status_code == 401
 
     def test_cookie_not_secure_over_http(self):
         # WS_SCHEME defaults to "ws" in tests → secure flag must be absent

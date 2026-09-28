@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import random
+import secrets
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +23,9 @@ AUDIENCE_HTML = Path(__file__).parent / "audience.html"
 AUDIENCE_SRC  = Path(__file__).parent / "src"
 PROJECTOR_SECRET   = os.getenv("PROJECTOR_SECRET", "")    # Optional WS projector auth
 PROJECTOR_PASSWORD = os.getenv("PROJECTOR_PASSWORD", "changeme")  # Page password ("" = off)
+# Opaque per-process token stored in the auth cookie, so the password itself
+# never reaches the browser. A server restart invalidates existing cookies.
+SESSION_TOKEN = secrets.token_urlsafe(32)
 LIKES_CAP = 1000  # Max recorded likes per slide (C3 fix)
 
 # ── Server state ──────────────────────────────────────────────────────────────
@@ -146,7 +151,7 @@ def _auth_ok(request: Request) -> bool:
     """Return True if password protection is off or cookie matches."""
     if not PROJECTOR_PASSWORD:
         return True
-    return request.cookies.get("proj_auth") == PROJECTOR_PASSWORD
+    return hmac.compare_digest(request.cookies.get("proj_auth", "").encode(), SESSION_TOKEN.encode())
 
 
 # ── HTTP routes ───────────────────────────────────────────────────────────────
@@ -199,12 +204,14 @@ async def download_audience_pdf():
 
 @app.post("/login")
 async def login(password: str = Form(...)):
-    if PROJECTOR_PASSWORD and password != PROJECTOR_PASSWORD:
+    if PROJECTOR_PASSWORD and not hmac.compare_digest(
+        password.encode(), PROJECTOR_PASSWORD.encode()
+    ):
         err = '<p class="err">Wrong password.</p>'
         return HTMLResponse(_LOGIN_HTML.format(error=err), status_code=401)
     resp = RedirectResponse(url="/", status_code=303)
     _https = os.getenv("WS_SCHEME", "ws") == "wss"
-    resp.set_cookie("proj_auth", PROJECTOR_PASSWORD,
+    resp.set_cookie("proj_auth", SESSION_TOKEN,
                     httponly=True, samesite="strict", secure=_https)
     return resp
 

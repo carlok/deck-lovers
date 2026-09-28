@@ -20,6 +20,7 @@ os.environ.setdefault("WS_SCHEME", "ws")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import md2html
+from palette import google_fonts_css_url  # noqa: E402
 
 
 # ── parse_slides ─────────────────────────────────────────────────────────────
@@ -290,7 +291,7 @@ class TestBuildHtml:
 
     def test_custom_font_link_and_css(self):
         html = md2html.build_html(self.SLIDES, doc_title="Deck", font_family="Montserrat")
-        assert "fonts.googleapis.com" in html
+        assert google_fonts_css_url("Montserrat") in html
         assert "Montserrat" in html
         assert "montserrat" in html.lower()
 
@@ -622,7 +623,7 @@ class TestMain:
         ])
         md2html.main()
         content = out_file.read_text(encoding="utf-8")
-        assert "fonts.googleapis.com" in content
+        assert google_fonts_css_url("Montserrat") in content
         assert "Montserrat" in content
 
     def test_cli_font_invalid_exits(self, tmp_path, monkeypatch):
