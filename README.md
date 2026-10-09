@@ -196,6 +196,8 @@ Caddy obtains the cert and audience URL becomes `https://1-2-3-4.sslip.io/audien
 # Convert + export PDF only (no server start)
 ./deploy.sh --pdf-only
 ./deploy.sh --pdf-only --pdf-name deck.pdf   # → output/deck.pdf
+# --pdf-only writes only the named PDF. A normal run also writes output/audience.pdf,
+# the stable copy behind the audience download button.
 
 # Server only (skip conversion)
 ./deploy.sh --serve-only
@@ -379,6 +381,9 @@ All test suites run in containers and write coverage reports to `test-results/`.
 # Both Python or both JS
 ./run_tests.sh py
 ./run_tests.sh js
+
+# deploy.sh helpers (port check, .env loader, audience.pdf copy); needs lsof and python3
+./tests/deploy_test.sh
 ```
 
 **Converter suite** (as of last run): **125 tests**, **~92% line coverage** on `md2html`, `palette`, and `emoji_img`. Branding and PDF export naming are covered by:
@@ -529,6 +534,8 @@ cp .env.example .env
 ```
 
 `.env` is in `.gitignore` — never commit real credentials.
+
+`deploy.sh` also reads these options from `.env`: `PORT`, `PALETTE`, `FONT`, `EMOJI`, `LOGO`, `FRAME`, `LOGO_ON`, `PDF_MODE`, `PDF_NAME`, `PDF_QUALITY`. Precedence, highest first: command-line flag, environment variable, `.env`, built-in default. `SERVER_HOST` and `WS_SCHEME` are not read from `.env` because `deploy.sh` derives them from the mode (LAN IP, sslip.io, `--https`).
 
 ---
 

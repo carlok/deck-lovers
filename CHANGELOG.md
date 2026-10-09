@@ -7,10 +7,16 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- `./deploy.sh --pdf-only` no longer writes or deletes `output/audience.pdf`; it produces only the named PDF.
+- The websocket handler finishes its disconnect cleanup even when cancelled, so the audience is always told the projector left.
+
 ### Security
 - The projector login cookie now carries a random per-process session token instead of `PROJECTOR_PASSWORD` itself; restarting the server invalidates old cookies. Password and cookie checks are constant-time.
 
 ### Added
+- `deploy.sh` reads `PORT`, `PALETTE`, `FONT`, `EMOJI`, `LOGO`, `FRAME`, `LOGO_ON`, `PDF_MODE`, `PDF_NAME` and `PDF_QUALITY` from `.env` (flag > environment > `.env` > default).
+- `tests/deploy_test.sh` covers the port check, the `.env` loader and the `audience.pdf` copy, and runs in CI.
 - `deploy.sh` checks that the host port(s) it is about to publish are free before building, and names the container or process holding them (Podman only reports `"proxy already running"`).
 
 ## [0.1.0] - 2026-03-27

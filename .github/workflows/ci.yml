@@ -29,6 +29,13 @@ jobs:
       - name: Run ${{ matrix.suite.name }} tests
         run: ${{ matrix.suite.cmd }}
 
+  shell-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: deploy.sh helper tests
+        run: ./tests/deploy_test.sh
+
   js-tests:
     runs-on: ubuntu-latest
     strategy:

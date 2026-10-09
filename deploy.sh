@@ -53,6 +53,40 @@
 
 set -euo pipefail
 
+# ── .env defaults ─────────────────────────────────────────────────────────────
+# Compose reads .env on its own, but this script does not, so options such as
+# PORT would be ignored. Load the ones deploy.sh uses. Precedence, highest
+# first: command-line flag, real environment variable, .env, built-in default.
+# Parsed line by line, never sourced, so a value cannot run code.
+# SERVER_HOST and WS_SCHEME are deliberately not loaded: this script derives them
+# from the mode (LAN IP, sslip.io, --https), and .env.example ships
+# SERVER_HOST=localhost, which would break the audience QR code.
+_load_env_file() {
+  local file="$1" line key val
+  local dq='^"(.*)"[[:space:]]*(#.*)?$' sq="^'(.*)'[[:space:]]*(#.*)?\$"
+  local kv='^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=(.*)$'
+  [[ -r "$file" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    [[ "$line" =~ $kv ]] || continue
+    key="${BASH_REMATCH[2]}"; val="${BASH_REMATCH[3]}"
+    case "$key" in
+      PORT|PALETTE|FONT|EMOJI|LOGO|FRAME|LOGO_ON|PDF_MODE|PDF_NAME|PDF_QUALITY) ;;
+      *) continue ;;
+    esac
+    [[ -n "${!key+x}" ]] && continue          # already set in the environment
+    val="${val#"${val%%[![:space:]]*}"}"      # trim leading whitespace
+    if   [[ "$val" =~ $dq ]]; then val="${BASH_REMATCH[1]}"
+    elif [[ "$val" =~ $sq ]]; then val="${BASH_REMATCH[1]}"
+    else
+      val="${val%%[[:space:]]#*}"             # drop trailing  # comment
+      val="${val%"${val##*[![:space:]]}"}"    # trim trailing whitespace
+    fi
+    printf -v "$key" '%s' "$val"
+  done < "$file"
+}
+_load_env_file .env
+
 # ── Parse flags ───────────────────────────────────────────────────────────────
 CONVERT=true
 SERVE=true
@@ -354,9 +388,19 @@ _convert() {
 # ── Shared: server-side PDF export via headless browser ──────────────────────
 _export_pdf() {
   echo "▶ 3/3  pdf      output/slides.html → output/$PDF_NAME"
-  rm -f "output/$PDF_NAME" output/audience.pdf
+  # output/audience.pdf is the stable copy behind the audience download button
+  # (/download.pdf). A local --pdf-only run never serves or pushes it, so it
+  # produces only the named PDF and leaves any existing audience.pdf alone.
+  local audience_copy=true
+  if $PDF_ONLY && [[ "$MODE" == "local" ]]; then
+    audience_copy=false
+  fi
+  rm -f "output/$PDF_NAME"
+  if $audience_copy; then
+    rm -f output/audience.pdf
+  fi
   $COMPOSE run --rm --remove-orphans pdf /workspace/slides.html "/workspace/$PDF_NAME"
-  if [[ "$PDF_NAME" != "audience.pdf" ]]; then
+  if $audience_copy && [[ "$PDF_NAME" != "audience.pdf" ]]; then
     cp "output/$PDF_NAME" output/audience.pdf
   fi
   echo "  ✓ output/$PDF_NAME ready"

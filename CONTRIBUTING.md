@@ -13,6 +13,7 @@ Thanks for helping improve `deck-lovers`.
 4. Run tests before opening a PR:
    ```bash
    ./run_tests.sh
+   ./tests/deploy_test.sh   # only if you changed deploy.sh
    ```
 
 ## Pull request checklist
