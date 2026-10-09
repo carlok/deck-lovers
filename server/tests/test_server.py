@@ -29,6 +29,22 @@ from server import app, PROJECTOR_PASSWORD
 client = TestClient(app)
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _shared_event_loop():
+    """Run every test websocket on one shared event loop.
+
+    A plain TestClient starts a new thread and event loop per websocket, while
+    the server keeps clients and the projector in module globals. A message
+    written from one loop to a connection owned by another can lose its
+    wake-up, which made receive_json() hang at random. Entering the client as a
+    context manager gives all connections a single loop, like uvicorn does.
+    """
+    global client
+    with TestClient(app) as shared:
+        client = shared
+        yield
+
+
 def _login_cookie() -> dict[str, str]:
     """Log in with a throwaway client and return the auth cookie it was issued."""
     r = TestClient(app).post("/login", data={"password": PROJECTOR_PASSWORD},
@@ -278,10 +294,17 @@ def _register(ws, role):
     msg3 = ws.receive_json()
     assert msg3["type"] == "projector_status"
 
+    name = msg1.get("name", "")
     if role == "projector":
         ws.send_json({"type": "register_projector"})
+        # Each websocket handler runs in its own thread and event loop, so the
+        # registration is processed asynchronously. Wait until it has taken
+        # effect, otherwise a message sent next (a like, say) can be dropped
+        # because the server does not know the projector yet.
+        assert _wait_for(lambda: server_mod.clients.get(server_mod.projector_ws) == name), \
+            "server did not register the projector"
 
-    return msg1.get("name", "")
+    return name
 
 
 class TestWebSocket:
@@ -556,6 +579,70 @@ class TestWebSocket:
                 assert replay["recent"] == ["Alice🦊", "Bob🐺"]
         finally:
             server_mod.likes = {}
+            server_mod.projector_ws = None
+
+
+class TestDisconnectCleanup:
+    def test_projector_cleanup_survives_cancellation(self):
+        """A cancelled handler must still mark the projector gone and tell the audience.
+
+        Starlette's TestClient sends the disconnect and then cancels the app task
+        straight away (server shutdown does the same), so the cleanup in the
+        handler's ``finally`` races the cancellation. Before the fix this hung
+        ``test_projector_status_broadcast_on_disconnect`` about half the time and
+        leaked stale clients into later tests.
+        """
+        import anyio
+
+        class FakeWS:
+            def __init__(self):
+                self.sent = []
+                self.inbox = asyncio.Queue()
+
+            async def accept(self):
+                pass
+
+            async def send_text(self, data):
+                await anyio.sleep(0.001)  # a real socket send suspends the task
+                self.sent.append(json.loads(data))
+
+            async def iter_text(self):
+                while True:
+                    yield await self.inbox.get()
+
+        async def until(predicate):
+            with anyio.fail_after(2):
+                while not predicate():
+                    await anyio.sleep(0.005)
+
+        async def scenario():
+            aud, proj = FakeWS(), FakeWS()
+            scopes = {}
+
+            async def run(name, ws):
+                with anyio.CancelScope() as scope:
+                    scopes[name] = scope
+                    await server_mod.websocket_endpoint(ws)
+
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(run, "aud", aud)
+                tg.start_soon(run, "proj", proj)
+                await until(lambda: len(aud.sent) >= 3 and len(proj.sent) >= 3)
+                await proj.inbox.put(json.dumps({"type": "register_projector"}))
+                await until(lambda: server_mod.projector_ws is proj)
+
+                scopes["proj"].cancel()  # what TestClient teardown does
+
+                await until(lambda: server_mod.projector_ws is None)
+                await until(lambda: {"type": "projector_status", "connected": False} in aud.sent)
+                assert proj not in server_mod.clients
+                scopes["aud"].cancel()
+
+        try:
+            anyio.run(scenario)
+        finally:
+            server_mod.clients.clear()
+            server_mod.used_names.clear()
             server_mod.projector_ws = None
 
 

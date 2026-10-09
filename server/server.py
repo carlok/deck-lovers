@@ -11,6 +11,7 @@ import secrets
 from pathlib import Path
 from typing import Optional
 
+import anyio
 from fastapi import FastAPI, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
@@ -368,7 +369,11 @@ async def websocket_endpoint(ws: WebSocket):
     except WebSocketDisconnect:
         pass
     finally:
-        if projector_ws is ws:
-            projector_ws = None
-            await _broadcast_audience({"type": "projector_status", "connected": False})
-        used_names.discard(clients.pop(ws, ""))
+        # Shielded: if this task is cancelled (server shutdown, Starlette's
+        # TestClient teardown) the cleanup must still run to completion, or the
+        # audience is never told the projector left and stale clients pile up.
+        with anyio.CancelScope(shield=True):
+            if projector_ws is ws:
+                projector_ws = None
+                await _broadcast_audience({"type": "projector_status", "connected": False})
+            used_names.discard(clients.pop(ws, ""))
