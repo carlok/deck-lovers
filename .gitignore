@@ -35,6 +35,9 @@ coverage/
 *.crt
 *.csr
 
+# Local agent instructions
+CLAUDE.md
+
 # Env overrides (keep .env.example committed, not .env)
 .env
 .env.*
