@@ -1,0 +1,19 @@
+# Build context for the md2html, pdf and test-converter images is the repo root.
+# The Dockerfiles only COPY from converter/ and palettes/, so keep everything
+# else (above all the generated PDFs in output/) out of the context.
+output/
+tmp/
+test-results/
+.git/
+.github/
+.claude/
+.env
+.env.*
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+**/.pytest_cache/
+.venv/
+venv/
+.DS_Store
