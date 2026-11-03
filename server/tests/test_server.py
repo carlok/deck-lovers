@@ -89,6 +89,45 @@ class TestHealth:
         assert "total_slides" in data or "slide_count" in data or "slides" in data
 
 
+class TestHealthcheckCli:
+    def test_healthcheck_host_wildcard(self):
+        assert server_mod.healthcheck_host("0.0.0.0") == "127.0.0.1"
+        assert server_mod.healthcheck_host("::") == "127.0.0.1"
+        assert server_mod.healthcheck_host("127.0.0.1") == "127.0.0.1"
+
+    def test_run_healthcheck_ok(self, monkeypatch):
+        class FakeResp:
+            status = 200
+
+            def read(self):
+                return b'{"status":"ok"}'
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        monkeypatch.setattr("urllib.request.urlopen", lambda *_a, **_k: FakeResp())
+        assert server_mod.run_healthcheck() == 0
+
+    def test_run_healthcheck_bad_status(self, monkeypatch):
+        class FakeResp:
+            status = 503
+
+            def read(self):
+                return b'{"status":"ok"}'
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        monkeypatch.setattr("urllib.request.urlopen", lambda *_a, **_k: FakeResp())
+        assert server_mod.run_healthcheck() == 1
+
+
 # ── GET / (slides) ────────────────────────────────────────────────────────────
 
 class TestAuth:

@@ -293,6 +293,43 @@ podman compose build pdf
 podman compose build server
 ```
 
+### Server container (Distroless runtime)
+
+The **`server`** image uses a multi-stage build: dependencies are installed on
+`python:3.11-slim-bookworm`, then copied into a
+[Distroless](https://github.com/GoogleContainerTools/distroless) runtime
+(`gcr.io/distroless/python3-debian12:nonroot`). There is no shell, `curl`, or
+package manager inside that image. Converter and PDF images keep their normal
+bases (including Chromium for Puppeteer).
+
+Health checks call `/usr/bin/python3 server.py healthcheck`, which performs an
+HTTP GET to `/health` on loopback — no `sh`, `curl`, or `wget`. The compose
+healthcheck needs podman-compose ≥ 1.5 (older versions wrap exec-form checks in
+`/bin/sh -c`, which does not exist in Distroless). Podman ignores the
+Dockerfile `HEALTHCHECK` unless you build with `--format docker`.
+
+**Debugging a running server container** — there is no shell, so
+`podman exec … sh` does not work. Instead:
+
+```bash
+# Run Python inside the container
+podman exec deck-lovers_server_1 /usr/bin/python3 -c 'import os; print(os.listdir("/app"))'
+
+# Copy files out
+podman cp deck-lovers_server_1:/app/server.py /tmp/
+```
+
+For an image with a busybox shell, swap the runtime base for
+`gcr.io/distroless/python3-debian12:debug-nonroot` and rebuild.
+
+From the host you can still curl the published port, read logs, and inspect health:
+
+```bash
+curl -sf "http://127.0.0.1:${PORT:-8000}/health"
+podman compose logs server
+podman inspect "$(podman compose ps -q server)" --format '{{json .State.Health}}'
+```
+
 ---
 
 ## 4. Input: Markdown only (no LaTeX)
