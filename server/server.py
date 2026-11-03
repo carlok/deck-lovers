@@ -256,6 +256,32 @@ async def health():
     }
 
 
+def healthcheck_host(bind_host: str) -> str:
+    """Map wildcard bind addresses to loopback for in-container probes."""
+    if bind_host in ("0.0.0.0", "::"):
+        return "127.0.0.1"
+    return bind_host
+
+
+def run_healthcheck(port: int = 8000, timeout: float = 4.0) -> int:
+    """HTTP GET /health for distroless HEALTHCHECK (stdlib only, no shell)."""
+    import urllib.error
+    import urllib.request
+
+    host = healthcheck_host(os.getenv("HEALTHCHECK_HOST", "127.0.0.1"))
+    url = f"http://{host}:{port}/health"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            if resp.status != 200:
+                return 1
+            body = json.loads(resp.read().decode())
+            if body.get("status") != "ok":
+                return 1
+    except (urllib.error.URLError, OSError, json.JSONDecodeError, ValueError):
+        return 1
+    return 0
+
+
 # ── WebSocket ─────────────────────────────────────────────────────────────────
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
@@ -377,3 +403,10 @@ async def websocket_endpoint(ws: WebSocket):
                 projector_ws = None
                 await _broadcast_audience({"type": "projector_status", "connected": False})
             used_names.discard(clients.pop(ws, ""))
+
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) >= 2 and sys.argv[1] == "healthcheck":
+        raise SystemExit(run_healthcheck())

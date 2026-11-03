@@ -293,6 +293,41 @@ podman compose build pdf
 podman compose build server
 ```
 
+### Server container (Distroless runtime)
+
+The **`server`** image uses a multi-stage build: dependencies are installed on
+`python:3.11-slim`, then copied into a
+[Distroless](https://github.com/GoogleContainerTools/distroless) runtime
+(`gcr.io/distroless/python3-debian12:nonroot`). There is no shell, `curl`, or
+package manager inside that image. Converter and PDF images keep their normal
+bases (including Chromium for Puppeteer).
+
+Health checks call `python3 server.py healthcheck`, which performs an HTTP GET
+to `/health` on loopback — no `sh`, `curl`, or `wget`.
+
+**Debugging a running server container** — Distroless images cannot be shelled
+into with `podman exec … sh`. Use ephemeral debug tooling instead:
+
+```bash
+# Podman 5+
+podman debug deck-lovers-server-1
+
+# Docker Desktop / Docker Engine 23+
+docker debug deck-lovers-server-1
+```
+
+From the host you can still curl the published port, read logs, and inspect health:
+
+```bash
+curl -sf "http://127.0.0.1:${PORT:-8000}/health"
+podman compose logs server
+podman inspect "$(podman compose ps -q server)" --format '{{json .State.Health}}'
+```
+
+For a registry-hosted alternative with the same layout,
+[Docker Hardened Images](https://dhi.io/) publish Distroless-compatible variants
+when your environment can pull them without extra authentication.
+
 ---
 
 ## 4. Input: Markdown only (no LaTeX)
