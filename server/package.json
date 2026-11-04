@@ -13,7 +13,7 @@
     "testEnvironment": "node",
     "testMatch": ["**/tests/js/**/*.test.js"],
     "collectCoverageFrom": ["<rootDir>/src/*.pure.js"],
-    "coverageDirectory": "/reports/server-js",
+    "coverageDirectory": "../test-results/server-js",
     "coverageReporters": ["text", "html"]
   }
 }
