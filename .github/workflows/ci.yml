@@ -15,11 +15,15 @@ jobs:
       matrix:
         suite:
           - name: converter
+            directory: converter
             req: converter/requirements-test.txt
-            cmd: pytest converter/tests -q
+            cov_modules: --cov=md2html --cov=palette --cov=emoji_img
+            cov_fail_under: "88"
           - name: server
+            directory: server
             req: server/requirements-test.txt
-            cmd: pytest server/tests -q
+            cov_modules: --cov=server
+            cov_fail_under: "89"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,8 +33,29 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r "${{ matrix.suite.req }}"
-      - name: Run ${{ matrix.suite.name }} tests
-        run: ${{ matrix.suite.cmd }}
+      - name: Run ${{ matrix.suite.name }} tests with coverage
+        working-directory: ${{ matrix.suite.directory }}
+        run: |
+          set -o pipefail
+          pytest tests/ -q \
+            ${{ matrix.suite.cov_modules }} \
+            --cov-report=term-missing \
+            --cov-fail-under=${{ matrix.suite.cov_fail_under }} \
+            | tee pytest-coverage.txt
+      - name: Coverage summary (${{ matrix.suite.name }})
+        if: always()
+        working-directory: ${{ matrix.suite.directory }}
+        run: |
+          {
+            echo "### Python coverage — ${{ matrix.suite.name }}"
+            echo '```text'
+            if test -f pytest-coverage.txt; then
+              sed -n '/^Name/,/^TOTAL/p' pytest-coverage.txt || tail -30 pytest-coverage.txt
+            else
+              echo "No coverage output captured."
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   shell-tests:
     runs-on: ubuntu-latest
@@ -54,6 +79,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
         working-directory: ${{ matrix.dir }}
-      - name: Run Jest
-        run: npm test -- --ci
+      - name: Run Jest with coverage
         working-directory: ${{ matrix.dir }}
+        run: |
+          set -o pipefail
+          npm test -- --ci --coverageReporters=text-summary --coverageReporters=text \
+            | tee jest-coverage.txt
+      - name: Coverage summary (${{ matrix.dir }})
+        if: always()
+        working-directory: ${{ matrix.dir }}
+        run: |
+          {
+            echo "### Jest coverage — ${{ matrix.dir }}"
+            echo '```text'
+            if test -f jest-coverage.txt; then
+              sed -n '/Coverage summary/,/Ran all test suites/p' jest-coverage.txt || tail -25 jest-coverage.txt
+            else
+              echo "No coverage output captured."
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

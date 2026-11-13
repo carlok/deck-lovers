@@ -2,6 +2,9 @@
 
 Thanks for helping improve `deck-lovers`.
 
+Coding agents should read `AGENT.md` for setup, test commands, and repository
+conventions. Community standards are in `CODE_OF_CONDUCT.md`.
+
 ## Development setup
 
 1. Fork and clone the repository.
