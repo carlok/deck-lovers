@@ -41,9 +41,15 @@ conventions. Community standards are in `CODE_OF_CONDUCT.md`.
   - Proposed solution
   - Validation performed
 
+## Security vulnerabilities
+
+Do **not** file public issues for security problems. Follow
+[SECURITY.md](SECURITY.md) and use [GitHub private vulnerability
+reporting](https://github.com/carlok/deck-lovers/security/advisories/new).
+
 ## Reporting bugs
 
-Open an issue with:
+For non-security bugs, open an issue with:
 - Environment (OS, Docker/Podman version, browser)
 - Steps to reproduce
 - Expected behavior

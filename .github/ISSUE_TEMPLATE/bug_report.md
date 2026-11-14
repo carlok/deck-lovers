@@ -6,6 +6,8 @@ labels: bug
 assignees: ""
 ---
 
+> **Security vulnerabilities:** Do not use this template. See [SECURITY.md](../../SECURITY.md) and report privately via the repository Security tab.
+
 ## Description
 
 Describe the problem clearly.

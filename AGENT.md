@@ -102,4 +102,4 @@ job overview.
 ## Conduct
 
 Community standards: `CODE_OF_CONDUCT.md`. Enforcement contact:
-[@carlok on GitHub](https://github.com/carlok) only (not email).
+`carlo.perassi@gmail.com`. Security reports: `SECURITY.md` (not public issues).
