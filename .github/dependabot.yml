@@ -8,27 +8,79 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    groups:
+      pip-converter-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      pip-converter-major:
+        patterns:
+          - "*"
+        update-types:
+          - major
 
   - package-ecosystem: pip
     directory: /server
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    groups:
+      pip-server-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      pip-server-major:
+        patterns:
+          - "*"
+        update-types:
+          - major
 
   - package-ecosystem: npm
     directory: /converter
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    groups:
+      npm-converter-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      npm-converter-major:
+        patterns:
+          - "*"
+        update-types:
+          - major
 
   - package-ecosystem: npm
     directory: /server
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    groups:
+      npm-server-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      npm-server-major:
+        patterns:
+          - "*"
+        update-types:
+          - major
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    groups:
+      actions:
+        patterns:
+          - "*"
