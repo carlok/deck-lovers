@@ -6,12 +6,12 @@ This project is currently maintained on the default branch only.
 
 ## Reporting a vulnerability
 
-Please do not open public issues for security vulnerabilities.
+Please **do not** open public GitHub issues for security vulnerabilities.
 
-Report privately to the maintainer:
-- GitHub: [@carlok](https://github.com/carlok)
+Report them privately using [GitHub private vulnerability reporting](https://github.com/carlok/deck-lovers/security/advisories/new) (repository **Security** tab → **Report a vulnerability**).
 
-Include:
+Include as much detail as you can:
+
 - Vulnerability description
 - Impact assessment
 - Reproduction steps or proof of concept
