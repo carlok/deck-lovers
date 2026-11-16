@@ -4,4 +4,4 @@ pytest-cov>=7.1.0
 pytest-asyncio>=1.4.1.post1
 httpx>=0.28.1
 # Transitive security floors (Dependabot / GHSA)
-certifi>=2026.10.18
+certifi>=2026.10.23
