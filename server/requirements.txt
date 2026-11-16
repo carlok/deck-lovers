@@ -3,3 +3,6 @@ uvicorn[standard]>=0.54.0
 websockets>=17.4
 python-multipart>=0.0.33
 anyio>=4.16.0
+# Transitive security floors (Dependabot / GHSA)
+h11>=0.16.0
+idna>=3.15
